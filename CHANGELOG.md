@@ -8,6 +8,24 @@ versions may contain breaking changes see migration notes below).
 
 ---
 
+## [0.12.46] - 2026-09-09
+
+### Fixed
+
+- **The "Preparing report" progress bar no longer stacks on the Optimus Session
+  form.** Analyze publishes `optimus_progress` many times per run (fetch, EXPLAIN,
+  one per analyzer, render, complete) and the form's handler drove
+  `frm.dashboard.set_headline` on every tick. In this Frappe version `set_headline`
+  appends a new `.form-message` each call rather than replacing it, so the form
+  filled with a stack of "Preparing report N% ..." bars. The handler now updates a
+  single self-managed banner element in place (the same pattern already used for the
+  background-jobs drain banner), styled with Frappe's native `.form-message.blue`
+  theme classes so it fits the desk UI in light and dark mode. It is removed when
+  the session reaches Ready or Failed and also cleared on every form refresh so a
+  stale bar cannot linger when you navigate to another session.
+
+---
+
 ## [0.12.45] - 2026-09-09
 
 ### Added

@@ -13,6 +13,7 @@ frappe.ui.form.on("Optimus Session", {
 		render_status_indicator(frm);
 		render_phase2_progress(frm);
 		render_drain_progress(frm);
+		render_analyze_progress(frm);
 		render_download_buttons(frm);
 		render_retry_button(frm);
 		render_regenerate_report_button(frm);
@@ -46,6 +47,50 @@ function render_ai_buttons(frm) {
 	});
 }
 
+// One self-managed "preparing report" banner element, updated in place. Frappe's
+// frm.dashboard.set_headline APPENDS a fresh .form-message on every call in this
+// version (frappe/public/js/frappe/form/layout.js show_message never clears the
+// container for non-empty html), so driving it from the per-tick optimus_progress
+// event stacked one bar per tick instead of updating one. This keeps a single
+// element and rewrites its contents. Pass html=null to remove it. It mirrors
+// _drain_banner's single-element mechanism (and, like it, is cleared on every
+// refresh by render_analyze_progress so a stale bar can't linger on another
+// session), but styles itself with Frappe's native .form-message.blue theme
+// classes rather than inline colours.
+function _progress_banner(frm, html) {
+	const root = frm.$wrapper;
+	if (!root || !root.length) return;
+	if (html == null) {
+		root.find(".optimus-analyze-banner").remove();
+		return;
+	}
+	let $b = root.find(".optimus-analyze-banner");
+	if (!$b.length) {
+		// Reuse Frappe's native .form-message.blue look (same padding, font
+		// size, blue scheme + dark-theme variants) so this matches the bar the
+		// old set_headline produced. It lives outside .form-message-container,
+		// so Frappe's show_message() clearing on each refresh never removes it.
+		$b = $('<div class="optimus-analyze-banner form-message blue"></div>');
+		const $host = root.find(".form-layout").first();
+		($host.length ? $host : root).prepend($b);
+	}
+	$b.html(html);
+}
+
+// Clear a stale progress banner on refresh / navigation. Live analyze progress
+// re-creates it via the optimus_progress handler, so whenever the shown session
+// is not Analyzing (a Ready / Failed session, or a different one you navigated
+// to) the banner must not linger. The ready / failed handlers also remove it,
+// but they are gated by mine(p) and Frappe reuses one frm object across
+// sessions of this doctype, so without this a banner left by session A would
+// stick when you switch to session B. Mirrors render_drain_progress.
+function render_analyze_progress(frm) {
+	if (frm.is_new()) return;
+	if (frm.doc.status !== "Analyzing") {
+		_progress_banner(frm, null);
+	}
+}
+
 // Show a live headline on the form while analyze is running (the floating
 // widget shows the same progress, but if you're sitting on the Profiler
 // Session form you shouldn't have to stare at a static "Analyzing" status
@@ -62,7 +107,10 @@ function subscribe_session_progress(frm) {
 		if (!mine(p)) return;
 		const pct = typeof p.percent === "number" ? Math.round(p.percent) : null;
 		const desc = frappe.utils.escape_html(p.description || "Analyzing…");
-		frm.dashboard.set_headline(
+		// Update one in-place banner rather than frm.dashboard.set_headline,
+		// which appends a new bar on every progress tick (see _progress_banner).
+		_progress_banner(
+			frm,
 			'<span class="text-muted">' +
 				'<i class="fa fa-spinner fa-spin" style="margin-right:6px;"></i>' +
 				(pct !== null ? __("Preparing report {0}% · {1}", [pct, desc]) : desc) +
@@ -71,13 +119,13 @@ function subscribe_session_progress(frm) {
 	});
 	frappe.realtime.on("optimus_session_ready", (p) => {
 		if (!mine(p)) return;
-		frm.dashboard.clear_headline();
+		_progress_banner(frm, null);
 		frappe.show_alert({ message: __("Report ready"), indicator: "green" });
 		setTimeout(() => frm.reload_doc(), 800);
 	});
 	frappe.realtime.on("optimus_session_failed", (p) => {
 		if (!mine(p)) return;
-		frm.dashboard.clear_headline();
+		_progress_banner(frm, null);
 		setTimeout(() => frm.reload_doc(), 800);
 	});
 	// v0.7.x: auto-arm fires server-side during analyze (off-form). Tell the
