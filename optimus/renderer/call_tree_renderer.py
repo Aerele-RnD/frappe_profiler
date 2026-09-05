@@ -91,7 +91,7 @@ def _ct_is_user_frame(node) -> bool:
 	return app not in FRAMEWORK_APPS
 
 
-def _render_call_tree_node(node, parent_ms, depth=0, unlimited=False, breadcrumb=True):
+def _render_call_tree_node(node, parent_ms, depth=0, unlimited=False, breadcrumb=True, threshold_ms=1000.0):
 	"""Phase K.5: recursive nested-``<details>`` emit for a single
 	call_tree node. Auto-opens the hottest path down to the first user-app
 	frame (``breadcrumb``); deeper branches start collapsed so the panel
@@ -129,14 +129,14 @@ def _render_call_tree_node(node, parent_ms, depth=0, unlimited=False, breadcrumb
 	pct_label = f" &middot; {pct:.0f}%" if parent_ms else ""
 	self_label = ""
 	if self_ms and cum_ms - self_ms > 1:
-		self_label = f" &middot; self {humanize_duration_ms(self_ms)}"
+		self_label = f" &middot; self {humanize_duration_ms(self_ms, threshold_ms)}"
 
 	out = [
 		f'<details class="{cls}"{open_attr}>',
 		'<summary>',
 		f'<span class="frame-name">{_e(fn)}</span>',
 		f'<span class="frame-meta">{_e(file)}{meta_lineno} &middot; '
-		f'{humanize_duration_ms(cum_ms)}{pct_label}{self_label}</span>',
+		f'{humanize_duration_ms(cum_ms, threshold_ms)}{pct_label}{self_label}</span>',
 		'</summary>',
 	]
 	if children:
@@ -166,7 +166,7 @@ def _render_call_tree_node(node, parent_ms, depth=0, unlimited=False, breadcrumb
 					and depth < _CALL_TREE_MAX_DEPTH
 				)
 				out.append(_render_call_tree_node(
-					c, cum_ms, depth + 1, unlimited, breadcrumb=child_bc,
+					c, cum_ms, depth + 1, unlimited, breadcrumb=child_bc, threshold_ms=threshold_ms,
 				))
 			out.append('</div>')
 		elif within_hard:
@@ -184,7 +184,7 @@ def _render_call_tree_node(node, parent_ms, depth=0, unlimited=False, breadcrumb
 			)
 			for c in main:
 				out.append(_render_call_tree_node(
-					c, cum_ms, depth + 1, unlimited=True, breadcrumb=False,
+					c, cum_ms, depth + 1, unlimited=True, breadcrumb=False, threshold_ms=threshold_ms,
 				))
 			out.append('</div></details></div>')
 		else:
@@ -199,7 +199,7 @@ def _render_call_tree_node(node, parent_ms, depth=0, unlimited=False, breadcrumb
 	return "".join(out)
 
 
-def _render_one_call_tree(top):
+def _render_one_call_tree(top, threshold_ms=1000.0):
 	"""Render the ``<div class="call-tree">`` block for a single action dict
 	(``call_tree_json`` + ``duration_ms`` + ``action_label``). Returns the
 	tree HTML, or "" when the action has no renderable Python frames (empty
@@ -229,13 +229,13 @@ def _render_one_call_tree(top):
 		cn = c or {}
 		if _ct_is_other_frame(cn.get("function")) or _ct_is_sql_leaf(cn):
 			continue
-		nodes.append(_render_call_tree_node(c, total_ms, depth=0))
+		nodes.append(_render_call_tree_node(c, total_ms, depth=0, threshold_ms=threshold_ms))
 	if not nodes:
 		return ""
 	return '<div class="call-tree">' + "".join(nodes) + '</div>'
 
 
-def _render_call_tree_panel(actions):
+def _render_call_tree_panel(actions, threshold_ms=1000.0):
 	"""Phase K.5 / v0.13: render the call-tree panel for the top-N slowest
 	actions that carry a ``call_tree_json``. Empty string when no action
 	carries a renderable tree (the template's ``{% if %}`` guard hides the
@@ -259,7 +259,7 @@ def _render_call_tree_panel(actions):
 	for top in ranked:
 		if len(rendered) >= _CALL_TREE_MAX_ACTIONS:
 			break
-		tree_html = _render_one_call_tree(top)
+		tree_html = _render_one_call_tree(top, threshold_ms=threshold_ms)
 		if not tree_html:
 			continue
 		total_ms = float(top.get("duration_ms") or 0)
@@ -305,7 +305,7 @@ def _render_call_tree_panel(actions):
 				'<div class="call-tree-action-head">'
 				f'<span class="call-tree-action-rank">#{rank}</span>'
 				f'<span class="call-tree-action-label">{_e(label)}</span>'
-				f'<span class="call-tree-action-meta">{humanize_duration_ms(total_ms)}</span>'
+				f'<span class="call-tree-action-meta">{humanize_duration_ms(total_ms, threshold_ms)}</span>'
 				'</div>'
 			)
 			parts.append(tree_html)

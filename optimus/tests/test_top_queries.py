@@ -139,10 +139,12 @@ def test_floor_keeps_queries_at_or_above_threshold(empty_context):
 	assert top[0]["query_duration_ms"] == 10.0
 
 
-def test_slow_query_title_rolls_over_to_seconds(empty_context):
-	"""A query at or past 1000ms reads as seconds in its title and
-	description (1234ms → "1.23s"), so the report shows "Slow query: 1.23s"
-	rather than a hard-to-skim four-digit millisecond count."""
+def test_slow_query_title_is_raw_ms_rollover_deferred_to_render(empty_context):
+	"""Analyzers bake RAW milliseconds into titles/descriptions. The
+	second-rollover (honouring large_duration_threshold_ms) is applied at
+	render time, not here, so nothing is baked that could drift from the
+	render-time impact badge. A 1234ms query reads "Slow query: 1234ms" at
+	the analyzer boundary."""
 	recording = {
 		"uuid": "r1",
 		"calls": [
@@ -159,8 +161,8 @@ def test_slow_query_title_rolls_over_to_seconds(empty_context):
 		if f["finding_type"] == "Slow Query"
 	]
 	assert len(slow) == 1
-	assert slow[0]["title"] == "Slow query: 1.23s"
-	assert "took 1.23s to run" in slow[0]["customer_description"]
+	assert slow[0]["title"] == "Slow query: 1234ms"
+	assert "took 1234ms to run" in slow[0]["customer_description"]
 
 
 def test_slow_query_title_stays_ms_below_one_second(empty_context):

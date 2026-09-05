@@ -42,21 +42,20 @@ def _format_duration_ms(ms, threshold_ms: float = 1000.0, decimals: int = 0):
 
 	Defensive on input: ``None`` / non-numeric → ``"0ms"``; honours sign.
 
-	v0.7.x: returns ``markupsafe.Markup`` so the seconds branch can
-	emit a ``<span class="time-high">`` wrapper without being escaped
-	when rendered via ``{{ fmt_ms(...) }}`` in Jinja. The wrapper draws
-	the reader's eye to values slow enough to roll over into seconds
-	the timing rule itself is unchanged, just the visual emphasis is
-	new. ``Markup`` subclasses ``str`` so Python callers that compare /
-	concat the return value still work.
+	The timing rule itself lives in one place, ``analyzers.base.humanize_duration_ms``.
+	This wrapper adds the HTML: the seconds branch is wrapped in a
+	``<span class="time-high">`` so the report draws the reader's eye to slow
+	values. Returns ``markupsafe.Markup`` so the wrapper is not escaped when
+	rendered via ``{{ fmt_ms(...) }}`` in Jinja (``Markup`` subclasses ``str``
+	so Python callers that compare / concat still work).
 	"""
-	try:
-		v = float(ms) if ms is not None else 0.0
-	except (TypeError, ValueError):
-		return Markup("0ms")
-	if threshold_ms and abs(v) >= threshold_ms:
-		return Markup(f'<span class="time-high">{v / 1000:.2f}s</span>')
-	return Markup(f"{v:.{decimals}f}ms")
+	from optimus.analyzers.base import humanize_duration_ms
+
+	text = humanize_duration_ms(ms, threshold_ms, decimals)
+	# Seconds branch (ends in "s" but not "ms") gets the eye-catch wrapper.
+	if text.endswith("s") and not text.endswith("ms"):
+		return Markup(f'<span class="time-high">{text}</span>')
+	return Markup(text)
 
 
 def _format_datetime_display(value) -> str:

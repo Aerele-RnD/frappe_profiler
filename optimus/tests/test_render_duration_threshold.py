@@ -7,6 +7,7 @@ The threshold controls how durations render in the report HTML: values at
 or above the threshold display as seconds (e.g. ``5.23s``); below it, they
 stay as milliseconds (``800ms``)."""
 
+import json
 import types
 from unittest.mock import patch
 
@@ -30,7 +31,7 @@ def _action(**kw):
 	return types.SimpleNamespace(**base)
 
 
-def _doc(actions):
+def _doc(actions, findings=None):
 	return types.SimpleNamespace(
 		name="PS-t", session_uuid="t", title="t",
 		user="a@example.com", status="Ready",
@@ -42,8 +43,62 @@ def _doc(actions):
 		hot_frames_json="[]", session_time_breakdown_json=None,
 		total_python_ms=None, total_sql_ms=None,
 		analyzer_warnings=None, v5_aggregate_json="{}",
-		actions=actions, findings=[], phase_2_runs=[],
+		actions=actions, findings=findings or [], phase_2_runs=[],
 	)
+
+
+def _finding(title, impact_ms):
+	"""A Slow Query finding whose title carries a RAW-ms duration, as the
+	analyzer bakes it. Render reformats that duration; nothing is pre-formatted."""
+	return types.SimpleNamespace(
+		finding_type="Slow Query", severity="High",
+		title=title, customer_description="A single query was slow.",
+		estimated_impact_ms=impact_ms, affected_count=1, action_ref="0",
+		technical_detail_json=json.dumps({
+			"normalized_query": "SELECT 1",
+			"callsite": "apps/myapp/foo.py:456",
+		}),
+	)
+
+
+class TestFindingTitleThreshold:
+	"""Finding titles bake raw ms at analyze time; render reformats them using
+	the configured threshold, so a regenerated (not re-analyzed) report never
+	shows a title unit that disagrees with the render-time impact badge."""
+
+	def test_title_rolls_to_seconds_at_default(self):
+		doc = _doc([], findings=[_finding("Slow query: 5234ms", 5234.0)])
+		html = renderer.render_raw(doc, recordings=[])
+		assert "Slow query: 5.23s" in html
+		assert "Slow query: 5234ms" not in html
+
+	def test_title_stays_ms_on_relaxed_threshold(self):
+		doc = _doc([], findings=[_finding("Slow query: 5234ms", 5234.0)])
+		with patch(
+			"optimus.settings.get_config",
+			return_value=OptimusConfig(large_duration_threshold_ms=99999999),
+		):
+			html = renderer.render_raw(doc, recordings=[])
+		# Relaxed profile: the title stays in ms, matching the tables.
+		assert "Slow query: 5234ms" in html
+		assert "Slow query: 5.23s" not in html
+
+
+class TestNotesReproducerThreshold:
+	"""The Steps-to-Reproduce list bakes raw ms with a SPACE ("12418.3 ms") at
+	analyze time; render must reformat those too (regression: the space form
+	slipped past the first pass)."""
+
+	def test_steps_to_reproduce_ms_converted_at_render(self):
+		doc = _doc([])
+		doc.notes = (
+			"<ol><li>Submit Delivery Note: 12418.3 ms</li>"
+			"<li>Fast step: 800 ms</li></ol>"
+		)
+		html = renderer.render_raw(doc, recordings=[])
+		assert "Submit Delivery Note: 12.42s" in html
+		assert "12418.3 ms" not in html
+		assert "Fast step: 800ms" in html  # sub-second stays ms
 
 
 class TestDefaultThreshold:

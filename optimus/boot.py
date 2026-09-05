@@ -26,3 +26,13 @@ def boot_session(bootinfo):
 		bootinfo.optimus_enabled = bool(is_enabled())
 	except Exception:
 		bootinfo.optimus_enabled = True
+	# The "render durations in seconds above (ms)" threshold, so Desk form
+	# scripts (the Optimus Session hot-path picker) roll durations over to
+	# seconds at the same point the report does. Fails open to 1000ms.
+	try:
+		from optimus.settings import get_config
+		bootinfo.optimus_large_duration_threshold_ms = float(
+			get_config().large_duration_threshold_ms or 1000.0
+		)
+	except Exception:
+		bootinfo.optimus_large_duration_threshold_ms = 1000.0

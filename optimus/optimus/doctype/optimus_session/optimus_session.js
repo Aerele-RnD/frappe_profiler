@@ -25,14 +25,19 @@ frappe.ui.form.on("Optimus Session", {
 });
 
 // Duration formatter matching the server-side rule (optimus.analyzers.base
-// humanize_duration_ms): one second is 1000ms, so a value that reaches a full
-// second reads as "1.50s" instead of a four-digit millisecond count. Values
-// below a second stay in ms (with optional decimals). Keeps the Session page
-// consistent with the report the same durations appear in.
+// humanize_duration_ms): a value at or above the "render durations in seconds
+// above (ms)" threshold reads as "1.50s", below it stays in ms. The threshold
+// comes from frappe.boot (optimus.boot.boot_session) so the picker rolls over
+// at the same point the report does. Defaults to 1000ms.
 function optimus_fmt_ms(ms, decimals) {
 	var v = Number(ms) || 0;
-	if (Math.abs(v) >= 1000) return (v / 1000).toFixed(2) + "s";
-	return v.toFixed(decimals == null ? 0 : decimals) + "ms";
+	var dec = decimals == null ? 0 : decimals;
+	var threshold = (frappe.boot && frappe.boot.optimus_large_duration_threshold_ms) || 1000;
+	// Decide the unit from the rounded display value (matches the server), so a
+	// value that rounds up to a full second reads as "1.00s", never "1000ms".
+	var rounded = Number(Math.abs(v).toFixed(dec));
+	if (threshold && rounded >= threshold) return (v / 1000).toFixed(2) + "s";
+	return v.toFixed(dec) + "ms";
 }
 
 // Single AI button: "Refresh AI suggestions". Replaces five legacy

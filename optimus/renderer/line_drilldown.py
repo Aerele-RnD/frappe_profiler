@@ -169,7 +169,7 @@ def _phase2_invoked(fn: dict) -> bool:
 	return _function_invoked(fn)
 
 
-def _render_phase2_function_table(fn: dict) -> str:
+def _render_phase2_function_table(fn: dict, threshold_ms: float = 1000.0) -> str:
 	"""Per-function line table inside one phase-2 run.
 
 	Columns: line number, hit count, total ms, per-hit µs, source.
@@ -251,8 +251,8 @@ def _render_phase2_function_table(fn: dict) -> str:
 			f"<tr{tr_cls}>"
 			f'<td class="ln">{line.get("lineno", "")}</td>'
 			f'<td class="num">{line.get("hits", 0)}</td>'
-			f'<td class="num">{_format_duration_ms(ms, decimals=2)}</td>'
-			f'<td class="num">{_format_duration_ms(per_hit_ms, decimals=2)}</td>'
+			f'<td class="num">{_format_duration_ms(ms, threshold_ms, decimals=2)}</td>'
+			f'<td class="num">{_format_duration_ms(per_hit_ms, threshold_ms, decimals=2)}</td>'
 			f'<td class="src"><code>{_src_cell}</code></td>'
 			"</tr>"
 		)
@@ -261,7 +261,7 @@ def _render_phase2_function_table(fn: dict) -> str:
 	return "".join(html)
 
 
-def _render_phase2_diff_table(diff_rows: list[dict]) -> str:
+def _render_phase2_diff_table(diff_rows: list[dict], threshold_ms: float = 1000.0) -> str:
 	"""Render the cross-run delta table for one function profiled in 2+
 	runs the verify-the-fix view.
 
@@ -313,6 +313,11 @@ def _render_phase2_diff_table(diff_rows: list[dict]) -> str:
 		def _fmt(v):
 			return "" if v is None else (f"{v:.2f}" if isinstance(v, float) else str(v))
 
+		def _fmt_ms_cell(v):
+			# ms durations honour the configured second-rollover threshold, like
+			# the sibling per-function table (was previously raw "1500.00").
+			return "" if v is None else _format_duration_ms(v, threshold_ms, decimals=2)
+
 		_src_html = row.get("content_html")
 		_src = _src_html if _src_html else _e(row.get("content", ""))
 		source_cell = f"<code>{_src}</code>"
@@ -322,9 +327,9 @@ def _render_phase2_diff_table(diff_rows: list[dict]) -> str:
 			f"<td>{_e(status)}</td>"
 			f'<td class="num">{_fmt(row.get("prev_lineno"))}</td>'
 			f'<td class="num">{_fmt(row.get("curr_lineno"))}</td>'
-			f'<td class="num">{_fmt(row.get("prev_ms"))}</td>'
-			f'<td class="num">{_fmt(row.get("curr_ms"))}</td>'
-			f'<td class="num">{_fmt(delta)}</td>'
+			f'<td class="num">{_fmt_ms_cell(row.get("prev_ms"))}</td>'
+			f'<td class="num">{_fmt_ms_cell(row.get("curr_ms"))}</td>'
+			f'<td class="num">{_fmt_ms_cell(delta)}</td>'
 			f'<td class="src">{source_cell}</td>'
 			"</tr>"
 		)
@@ -337,7 +342,7 @@ def _render_phase2_diff_table(diff_rows: list[dict]) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _render_line_drilldown_panel(session_doc: Any) -> str:
+def _render_line_drilldown_panel(session_doc: Any, threshold_ms: float = 1000.0) -> str:
 	"""Build the Line-Level Drilldown section HTML. Returns an empty
 	string when the session has no phase-2 runs (the template's
 	``{% if line_drilldown_html %}`` guard then skips the section
@@ -442,7 +447,7 @@ def _render_line_drilldown_panel(session_doc: Any) -> str:
 			f"<strong>Run {run_idx}</strong>"
 			'<span class="meta">'
 			f'<span class="status-badge status-{status}">{status}</span>'
-			f"{_format_duration_ms(total_ms)} &middot; {started}"
+			f"{_format_duration_ms(total_ms, threshold_ms)} &middot; {started}"
 			"</span>"
 			"</div>"
 		)
@@ -451,7 +456,7 @@ def _render_line_drilldown_panel(session_doc: Any) -> str:
 		not_exercised = []
 		for fn in run.get("functions", []):
 			if _phase2_invoked(fn):
-				html.append(_render_phase2_function_table(fn))
+				html.append(_render_phase2_function_table(fn, threshold_ms))
 			else:
 				not_exercised.append(fn.get("dotted_path", "?"))
 		if not_exercised:
@@ -474,7 +479,7 @@ def _render_line_drilldown_panel(session_doc: Any) -> str:
 		for path, diff_meta in diffs.items():
 			label = f"{path} Run {diff_meta['prev_run_idx'] + 1} → Run {diff_meta['curr_run_idx'] + 1}"
 			html.append(f'<div class="phase2-func"><div class="fn-name">{_e(label)}</div>')
-			html.append(_render_phase2_diff_table(diff_meta["rows"]))
+			html.append(_render_phase2_diff_table(diff_meta["rows"], threshold_ms))
 			html.append("</div>")
 
 	html.append("</section>")

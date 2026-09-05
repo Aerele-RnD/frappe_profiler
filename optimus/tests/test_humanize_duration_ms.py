@@ -23,10 +23,10 @@ class TestBelowThreshold:
 		assert humanize_duration_ms(800) == "800ms"
 
 	def test_just_under_threshold(self):
-		assert humanize_duration_ms(999.4) == "999ms"  # %.0f rounds
-		# Rounds up for display but the threshold check uses the raw value
-		# (999.9 < 1000), so it stays in the ms branch.
-		assert humanize_duration_ms(999.9) == "1000ms"
+		assert humanize_duration_ms(999.4) == "999ms"  # rounds down, stays ms
+		# 999.9 rounds up to a full second at display precision, so it rolls over
+		# to seconds rather than showing the four-digit "1000ms" the rule avoids.
+		assert humanize_duration_ms(999.9) == "1.00s"
 
 	def test_decimals_one(self):
 		assert humanize_duration_ms(12.5, decimals=1) == "12.5ms"
@@ -67,6 +67,18 @@ class TestCustomThreshold:
 
 	def test_threshold_zero_disables_conversion(self):
 		assert humanize_duration_ms(5234, threshold_ms=0) == "5234ms"
+
+	def test_threshold_is_the_second_positional_arg(self):
+		# Signature matches _format_duration_ms: (ms, threshold_ms, decimals).
+		# Guards the footgun where a swapped order bound decimals to a huge
+		# threshold value and emitted a giant decimal string.
+		assert humanize_duration_ms(1500, 5000) == "1500ms"   # 1500 < 5000
+		assert humanize_duration_ms(1500, 1000) == "1.50s"    # 1500 >= 1000
+		assert humanize_duration_ms(12.5, 1000, 1) == "12.5ms"  # decimals is third
+
+	def test_relaxed_profile_keeps_ms(self):
+		# The shipped "Relaxed" profile sets an effectively-infinite threshold.
+		assert humanize_duration_ms(5000, threshold_ms=99999999) == "5000ms"
 
 
 class TestDefensive:
