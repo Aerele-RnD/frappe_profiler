@@ -230,7 +230,7 @@ def _hot_line_finding(fn: dict, line: dict, severity: str) -> dict:
 			f"The line **{dotted_path}:{lineno}** is the dominant time sink in "
 			f"this function ({total_ms:.0f}ms across {hits} executions). "
 			"Optimizing it directly will move the needle on the function's "
-			"total cost line-level timing makes the fix targetable."
+			"total cost. Line-level timing makes the fix targetable."
 		),
 		"technical_detail_json": json.dumps({
 			"dotted_path": dotted_path,
@@ -536,7 +536,7 @@ def run_analyze(session_uuid: str, run_uuid: str) -> None:
 	re-raise so RQ logs it.
 	"""
 	if not _FRAPPE_AVAILABLE:
-		raise RuntimeError("frappe not importable run under bench")
+		raise RuntimeError("frappe not importable, run under bench")
 
 	from optimus.line_profile import capture
 

@@ -131,7 +131,7 @@ def analyze(recordings: list[dict], context) -> AnalyzerResult:
 						"callsite": q["callsite"],
 						"recording_uuid": q["recording_uuid"],
 						"fix_hint": (
-							"Investigate this query it may need an index, a "
+							"Investigate this query. It may need an index, a "
 							"refactored WHERE clause, or a different access pattern. "
 							"Run EXPLAIN ANALYZE on a representative production query "
 							"to see the actual cost."

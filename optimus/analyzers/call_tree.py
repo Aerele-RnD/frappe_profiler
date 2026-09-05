@@ -1175,7 +1175,7 @@ def _walk_for_findings(
 					desc = (
 						f"The body of **{fn_name}** itself consumed "
 						f"{pct_str} of the action time ({impact_ms:.0f}ms). "
-						"This isn't a slow subcall the function's own logic "
+						"This isn't a slow subcall. The function's own logic "
 						"is the bottleneck. To pinpoint the exact hot line, "
 						"run a **Line-Level Drilldown** (the *Run Line-Profile "
 						"Pass* button on the session) and pick this function "

@@ -85,7 +85,7 @@ def _customer_description_for(fn_name: str, count: int, callsite: dict | None = 
 		return (
 			f"The same document was fetched **{count} times** from the same "
 			"line of code. This is almost always a loop that reloads a "
-			"document inside its body caching the result outside the loop "
+			"document inside its body. Caching the result outside the loop "
 			"would eliminate the redundant fetches."
 			f"{site_hint}"
 		)
@@ -100,7 +100,7 @@ def _customer_description_for(fn_name: str, count: int, callsite: dict | None = 
 		return (
 			f"The same permission check ran **{count} times** from the same "
 			"callsite. Permission checks involve role lookups and DocType "
-			"validation caching the result for the duration of the action "
+			"validation. Caching the result for the duration of the action "
 			"is the standard fix."
 			f"{site_hint}"
 		)
@@ -297,7 +297,7 @@ def analyze(recordings: list, context) -> AnalyzerResult:
 			f"Suppressed {drop_cross_request_spread} Redundant Call "
 			"candidate(s) where the threshold was reached only by "
 			"summing across multiple requests (e.g. one cache lookup "
-			"per request × 25 requests). That's not a loop it's a "
+			"per request × 25 requests). That's not a loop. It's a "
 			"call that naturally fires once per request. A real "
 			"redundant loop has the threshold met WITHIN a single "
 			"action."

@@ -65,7 +65,7 @@ def _require_frappe() -> None:
 def _require_line_profiler() -> None:
 	if not _LP_AVAILABLE:
 		raise RuntimeError(
-			"line_profiler is not installed run "
+			"line_profiler is not installed. Run "
 			"`bench pip install line_profiler` to enable phase 2."
 		)
 
