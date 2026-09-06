@@ -2,12 +2,10 @@
 # Copyright (c) 2026, Optimus contributors
 # For license information, please see license.txt
 
-"""Analyzer: browser-side timing join + Web Vitals (v0.5.0).
+"""Browser-side timing join + Web Vitals analyzer.
 
-Reads ``context.frontend_data`` (populated by analyze.run from
-``profiler:frontend:<session_uuid>``). Joins XHR timings to Profiler
-Actions by recording_id. Dedupes multi-fire LCP per page. Emits three
-finding types:
+Reads ``context.frontend_data``, joins XHR timings to Profiler Actions by
+recording_id and dedupes multi-fire LCP per page. Emits three finding types:
 
 - Slow Frontend Render    (LCP > 2500ms on any page)
 - Network Overhead        (XHR - backend > 500ms AND > backend * 1.5)
@@ -46,7 +44,7 @@ def analyze(recordings: list[dict], context) -> AnalyzerResult:
     # returned None and every XHR row showed up as "action_0",
     # "action_1", etc. in the report. Pull the label from
     # context.actions instead, fall back through the recording's
-    # raw method+path, and only then to the synthetic "action_N".
+    # raw method+path and only then to the synthetic "action_N".
     ctx_actions = getattr(context, "actions", None) or []
 
     def _label_for(idx: int) -> str:
