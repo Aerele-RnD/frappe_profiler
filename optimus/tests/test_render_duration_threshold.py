@@ -100,6 +100,25 @@ class TestNotesReproducerThreshold:
 		assert "Fast step: 800ms" in html  # sub-second stays ms
 
 
+class TestDisabledThresholdHonouredEverywhere:
+	"""Regression for the review finding: the finding impact badge is built by
+	report_context, which used to fall back to 1000 for a 0 threshold and roll a
+	value over to seconds even when the whole report was set to stay in ms. With
+	threshold=0 ("disable") honoured in every render path, the badge and title
+	both stay in ms, so the two halves of the report can no longer disagree."""
+
+	def test_finding_title_and_badge_both_stay_ms_when_disabled(self):
+		doc = _doc([], findings=[_finding("Slow query: 5234ms", 5234.0)])
+		with patch(
+			"optimus.settings.get_config",
+			return_value=OptimusConfig(large_duration_threshold_ms=0),
+		):
+			html = renderer.render_raw(doc, recordings=[])
+		# Nothing rolls over: the raw ms form survives, no seconds anywhere.
+		assert "5234ms" in html
+		assert "5.23s" not in html
+
+
 class TestDefaultThreshold:
 	def test_slow_row_renders_in_seconds(self):
 		doc = _doc([

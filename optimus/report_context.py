@@ -17,9 +17,26 @@ from typing import Any
 
 from markupsafe import Markup
 
+from optimus.analyzers.base import humanize_duration_ms
+
+# A whole captured flow slower than this reads as "danger" on the Total-time
+# KPI. Deliberately separate from large_duration_threshold_ms (which is only a
+# display preference for when to render seconds), so changing the display unit
+# never moves the alarm. Tunable; not currently a settings field.
+_TOTAL_TIME_DANGER_MS = 3000.0
+
 # ---------------------------------------------------------------------------
 # Helpers small pure functions called by sub-builders below
 # ---------------------------------------------------------------------------
+
+
+def _resolve_threshold_ms(render_config) -> float:
+	"""The large_duration_threshold_ms in effect, defaulting to 1000 only when
+	the value is unset. An explicit 0 (disable the seconds rollover) is
+	preserved, matching the shared formatters and renderer._internal, so the
+	whole report agrees on when to roll durations over to seconds."""
+	t = (render_config or {}).get("large_duration_threshold_ms")
+	return 1000 if t is None else t
 
 
 def _web_vital_class(value, good_threshold, poor_threshold) -> str:
@@ -69,15 +86,17 @@ def _is_user_code(function_or_path, ignored_apps: tuple[str, ...] = ()) -> bool:
 
 
 def _ms_display(ms, decimals: int = 0, threshold_ms: float = 1000.0) -> str:
-	"""Format milliseconds in the report's spaced style ("420 ms" / "5.00 s"):
+	"""Format milliseconds in the report's compact style ("420ms" / "5.00s"):
 	ms (``decimals`` places) below ``threshold_ms``, seconds (2 decimals) at or
 	above. ``threshold_ms`` is the "render durations in seconds above (ms)"
-	setting; ``0`` disables conversion."""
+	setting; ``0`` disables conversion. Returns "" for a ``None`` input.
+
+	Delegates the unit decision to ``humanize_duration_ms`` so every duration in
+	the report rolls over at the same point, rounds the same way and reads in the
+	same style (no space before the unit, no highlight span)."""
 	if ms is None:
 		return ""
-	if not (threshold_ms and round(abs(ms), decimals) >= threshold_ms):
-		return f"{ms:.{decimals}f} ms"
-	return f"{ms / 1000:.2f} s"
+	return humanize_duration_ms(ms, threshold_ms, decimals)
 
 
 # ---------------------------------------------------------------------------
@@ -115,17 +134,16 @@ def _build_tldr(tldr) -> dict:
 def _build_kpis(session_doc, ctx) -> list[dict]:
 	"""Contract ``kpis`` = exactly 4 items: total time, queries, ops, findings.
 
-	Severity breakdown comes from ``ctx.severity_counts`` and the danger
-	thresholds from ``render_config``.
+	Severity breakdown comes from ``ctx.severity_counts``. The Total-time danger
+	flag uses ``_TOTAL_TIME_DANGER_MS`` (a real performance threshold, not the
+	display-rollover setting); Issues-found is danger when any High finding
+	exists.
 	"""
 	fmt_ms = ctx.get("fmt_ms") or (lambda v, **kw: _ms_display(v, **kw))
 	total_ms = getattr(session_doc, "total_duration_ms", 0) or 0
 	total_query_ms = getattr(session_doc, "total_query_time_ms", 0) or 0
 	total_queries = getattr(session_doc, "total_queries", 0) or 0
 	total_requests = getattr(session_doc, "total_requests", 0) or 0
-
-	render_config = ctx.get("render_config") or {}
-	threshold_ms = render_config.get("large_duration_threshold_ms") or 1000
 
 	all_findings = ctx.get("all_findings") or ctx.get("findings") or []
 	total_findings = len(all_findings)
@@ -172,7 +190,7 @@ def _build_kpis(session_doc, ctx) -> list[dict]:
 				f"Call-tree timings sampled at ~{_sampler_ms:g}ms intervals; "
 				"sub-interval functions can be under-counted."
 			),
-			"is_danger": total_ms >= threshold_ms,
+			"is_danger": total_ms >= _TOTAL_TIME_DANGER_MS,
 		},
 		{
 			"label": "Database queries",
@@ -247,7 +265,7 @@ def _build_findings(findings, ctx) -> list[dict]:
 	smoking_footnote_html, chain, ai_fix}.
 	"""
 	severity_map = {"high": "high", "medium": "med", "low": "low"}
-	threshold_ms = (ctx.get("render_config") or {}).get("large_duration_threshold_ms") or 1000
+	threshold_ms = _resolve_threshold_ms(ctx.get("render_config"))
 	result = []
 	for f in findings or []:
 		detail = f.get("technical_detail") or {}
@@ -678,7 +696,7 @@ def _build_frontend(ctx) -> dict | None:
 
 	# "Render durations in seconds above (ms)" setting: the second-rollover
 	# threshold, shared with the report's tables so the frontend cells agree.
-	threshold_ms = (ctx.get("render_config") or {}).get("large_duration_threshold_ms") or 1000
+	threshold_ms = _resolve_threshold_ms(ctx.get("render_config"))
 
 	# web_vitals per-page row with computed *_class fields
 	web_vitals = []
@@ -949,7 +967,7 @@ def build_report_context(session_doc: Any, ctx: dict) -> dict:
 	except Exception:
 		_sampler_ms = 1.0
 	# "Render durations in seconds above (ms)" setting, shared with the tables.
-	_threshold_ms = (ctx.get("render_config") or {}).get("large_duration_threshold_ms") or 1000
+	_threshold_ms = _resolve_threshold_ms(ctx.get("render_config"))
 	# AI token-usage transparency: total tokens every AI feature consumed this
 	# session fix suggestions (per finding), index suggestions (per table),
 	# and the Steps-to-Reproduce humanization (one per session). Derived at
@@ -1046,9 +1064,7 @@ def build_report_context(session_doc: Any, ctx: dict) -> dict:
 		# J.3.1 non-contract additions the remaining two passthroughs
 		# the template needs before the legacy top-level keys can be
 		# dropped from renderer.py's context dict.
-		"large_duration_threshold_ms": (
-			(ctx.get("render_config") or {}).get("large_duration_threshold_ms") or 1000
-		),
+		"large_duration_threshold_ms": _resolve_threshold_ms(ctx.get("render_config")),
 		"background_jobs_summary": _build_background_jobs_summary(ctx.get("background_jobs") or {}),
 	}
 

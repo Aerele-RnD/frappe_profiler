@@ -32,10 +32,13 @@ frappe.ui.form.on("Optimus Session", {
 function optimus_fmt_ms(ms, decimals) {
 	var v = Number(ms) || 0;
 	var dec = decimals == null ? 0 : decimals;
-	var threshold = (frappe.boot && frappe.boot.optimus_large_duration_threshold_ms) || 1000;
-	// Decide the unit from the rounded display value (matches the server), so a
-	// value that rounds up to a full second reads as "1.00s", never "1000ms".
-	var rounded = Number(Math.abs(v).toFixed(dec));
+	var t = frappe.boot && frappe.boot.optimus_large_duration_threshold_ms;
+	// Only a missing value falls back to 1000; an explicit 0 disables the rollover.
+	var threshold = t === undefined || t === null ? 1000 : t;
+	// Decide the unit from the value rounded to whole milliseconds (matches the
+	// server, independent of decimals), so a value that rounds up to a full
+	// second reads as "1.00s", never "1000ms".
+	var rounded = Math.round(Math.abs(v));
 	if (threshold && rounded >= threshold) return (v / 1000).toFixed(2) + "s";
 	return v.toFixed(dec) + "ms";
 }

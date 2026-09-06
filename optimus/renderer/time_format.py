@@ -15,6 +15,8 @@ import re
 
 from markupsafe import Markup
 
+from optimus.analyzers.base import humanize_duration_ms
+
 
 def _format_duration_ms(ms, threshold_ms: float = 1000.0, decimals: int = 0):
 	"""Render a duration as ``"<n>ms"`` (with ``decimals`` digits) or, if it
@@ -28,8 +30,6 @@ def _format_duration_ms(ms, threshold_ms: float = 1000.0, decimals: int = 0):
 	(a ``str`` subclass) so it is not escaped in Jinja and Python callers can
 	still compare / concat the result.
 	"""
-	from optimus.analyzers.base import humanize_duration_ms
-
 	text = humanize_duration_ms(ms, threshold_ms, decimals)
 	# Seconds branch (ends in "s" but not "ms") gets the eye-catch wrapper.
 	if text.endswith("s") and not text.endswith("ms"):

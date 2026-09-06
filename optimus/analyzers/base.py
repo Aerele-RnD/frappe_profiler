@@ -36,18 +36,20 @@ def humanize_duration_ms(ms, threshold_ms: float = 1000.0, decimals: int = 0) ->
 	or above it. ``threshold_ms`` is the "render durations in seconds above (ms)"
 	setting; ``0`` disables the conversion.
 
-	The unit is chosen from the ROUNDED display value, so a value that rounds up
-	to a full second reads as ``"1.00s"`` rather than the four-digit ``"1000ms"``
-	the feature exists to avoid. ``decimals`` sets the millisecond precision only
-	(the seconds branch always keeps two). Argument order matches
-	``renderer.time_format._format_duration_ms``. Defensive: ``None`` or a
-	non-numeric value formats as zero.
+	The unit is chosen from the value rounded to whole milliseconds, independent
+	of the display ``decimals``, so a value that rounds up to a full second reads
+	as ``"1.00s"`` rather than the four-digit ``"1000ms"`` the feature exists to
+	avoid, and the same duration never rolls over in one place while staying in
+	milliseconds in another that shows it at a different precision. ``decimals``
+	sets the millisecond precision only (the seconds branch always keeps two).
+	Argument order matches ``renderer.time_format._format_duration_ms``.
+	Defensive: ``None`` or a non-numeric value formats as zero.
 	"""
 	try:
 		v = float(ms) if ms is not None else 0.0
 	except (TypeError, ValueError):
 		v = 0.0
-	if threshold_ms and round(abs(v), decimals) >= threshold_ms:
+	if threshold_ms and round(abs(v)) >= threshold_ms:
 		return f"{v / 1000:.2f}s"
 	return f"{v:.{decimals}f}ms"
 

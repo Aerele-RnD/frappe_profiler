@@ -264,6 +264,26 @@ class TestKpisShape:
 		assert out["kpis"][3]["sub"] == "none detected"
 		assert not out["kpis"][3]["is_danger"]
 
+	def test_total_time_danger_is_not_the_display_threshold(self):
+		# 1500ms is over the 1000ms seconds-rollover display setting but under
+		# the performance alarm, so it must NOT be flagged danger: the display
+		# unit preference does not drive the alarm colour.
+		out = build_report_context(
+			_doc(total_duration_ms=1500),
+			_ctx(render_config={"large_duration_threshold_ms": 1000}),
+		)
+		assert out["kpis"][0]["label"] == "Total time"
+		assert out["kpis"][0]["is_danger"] is False
+
+	def test_total_time_danger_fires_regardless_of_display_threshold(self):
+		# A genuinely slow flow (3500ms) crosses the performance alarm even
+		# under the Relaxed display profile (effectively-infinite threshold).
+		out = build_report_context(
+			_doc(total_duration_ms=3500),
+			_ctx(render_config={"large_duration_threshold_ms": 99999999}),
+		)
+		assert out["kpis"][0]["is_danger"] is True
+
 
 class TestReproShape:
 	def test_none_when_no_notes(self):
@@ -579,9 +599,9 @@ class TestFrontendShape:
 		assert row["ttfb_class"] == "vital-good"
 		# 1 second == 1000ms: a sub-second vital stays in ms, LCP at 5000ms
 		# rolls over to seconds so the reader isn't parsing a four-digit count.
-		assert row["fcp_display"] == "420 ms"
-		assert row["lcp_display"] == "5.00 s"
-		assert row["ttfb_display"] == "180 ms"
+		assert row["fcp_display"] == "420ms"
+		assert row["lcp_display"] == "5.00s"
+		assert row["ttfb_display"] == "180ms"
 
 	def test_partial_vitals_gets_none_class(self):
 		# Regression of the Phase I.5 production crash data shape.

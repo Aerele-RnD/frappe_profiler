@@ -17,6 +17,12 @@ def _fresh_bootinfo():
 	return types.SimpleNamespace()
 
 
+def _cfg(enabled, threshold_ms=1000.0):
+	"""A stand-in for settings.get_config() carrying just the two fields
+	boot_session reads."""
+	return types.SimpleNamespace(enabled=enabled, large_duration_threshold_ms=threshold_ms)
+
+
 @pytest.fixture(autouse=True)
 def _frappe_stub(monkeypatch):
 	"""Install a minimal frappe stub via monkeypatch.setitem so it is restored
@@ -28,7 +34,7 @@ def _frappe_stub(monkeypatch):
 class TestBootSession:
 	def test_enabled_flag_attached_when_settings_enabled(self, monkeypatch):
 		from optimus import boot, settings
-		monkeypatch.setattr(settings, "is_enabled", lambda: True)
+		monkeypatch.setattr(settings, "get_config", lambda: _cfg(True))
 
 		bootinfo = _fresh_bootinfo()
 		boot.boot_session(bootinfo)
@@ -36,21 +42,21 @@ class TestBootSession:
 
 	def test_enabled_flag_false_when_settings_disabled(self, monkeypatch):
 		from optimus import boot, settings
-		monkeypatch.setattr(settings, "is_enabled", lambda: False)
+		monkeypatch.setattr(settings, "get_config", lambda: _cfg(False))
 
 		bootinfo = _fresh_bootinfo()
 		boot.boot_session(bootinfo)
 		assert bootinfo.optimus_enabled is False
 
 	def test_fails_open_on_settings_read_error(self, monkeypatch):
-		"""If settings.is_enabled raises, default to True (fail open) rather
+		"""If settings.get_config raises, default to True (fail open) rather
 		than hide the widget on a settings-read error."""
 		from optimus import boot, settings
 
 		def boom():
 			raise RuntimeError("cache down")
 
-		monkeypatch.setattr(settings, "is_enabled", boom)
+		monkeypatch.setattr(settings, "get_config", boom)
 
 		bootinfo = _fresh_bootinfo()
 		boot.boot_session(bootinfo)
@@ -65,12 +71,29 @@ class TestBootSession:
 		always be a Python bool, not a truthy/falsy value."""
 		from optimus import boot, settings
 
-		# settings returns 1 (truthy int, but not bool).
-		monkeypatch.setattr(settings, "is_enabled", lambda: 1)
+		# config.enabled is 1 (truthy int, but not bool).
+		monkeypatch.setattr(settings, "get_config", lambda: _cfg(1))
 		bootinfo = _fresh_bootinfo()
 		boot.boot_session(bootinfo)
 		assert bootinfo.optimus_enabled is True
 		assert isinstance(bootinfo.optimus_enabled, bool)
+
+	def test_threshold_attached_from_config(self, monkeypatch):
+		from optimus import boot, settings
+		monkeypatch.setattr(settings, "get_config", lambda: _cfg(True, threshold_ms=500))
+		bootinfo = _fresh_bootinfo()
+		boot.boot_session(bootinfo)
+		assert bootinfo.optimus_large_duration_threshold_ms == 500.0
+
+	def test_threshold_zero_is_preserved_not_defaulted(self, monkeypatch):
+		# An explicit 0 disables the seconds rollover; it must reach the client
+		# as 0, not be silently bumped to 1000, so the desk picker matches a
+		# report configured to stay in ms.
+		from optimus import boot, settings
+		monkeypatch.setattr(settings, "get_config", lambda: _cfg(True, threshold_ms=0))
+		bootinfo = _fresh_bootinfo()
+		boot.boot_session(bootinfo)
+		assert bootinfo.optimus_large_duration_threshold_ms == 0.0
 
 
 class TestHookWired:

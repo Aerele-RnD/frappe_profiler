@@ -32,6 +32,22 @@ versions may contain breaking changes see migration notes below).
   fused elsewhere: the floating widget, the analyzer descriptions (index suggestions,
   EXPLAIN flags, call tree, redundant calls, top queries, N+1), the Optimus Settings
   dialogs, the line-profile messages, the DB-dialect notice and the AI fix errors.
+- **One consistent way of writing a duration.** The report had drifted into three
+  slightly different duration styles; a value like 5.23 seconds could appear with or
+  without a space before the unit depending on where you looked, and a value sitting
+  right on the one-second line could round to seconds in one spot and stay in
+  milliseconds right beside it. All duration text now goes through one helper, so the
+  spacing, the rounding and the rollover point match everywhere in the report.
+- **"Turn the rollover off" now applies to the whole report.** Setting the threshold to
+  0 (keep everything in milliseconds) was honoured by the main tables but ignored by the
+  findings, KPIs, database tables and line-level timings, which fell back to the default.
+  A 0 is now respected on every surface, so the report can no longer show milliseconds in
+  one half and seconds in the other.
+- **The "Total time" danger colour no longer follows the display setting.** The headline
+  Total-time figure turned red based on the same "show durations in seconds above" knob,
+  so changing the display unit accidentally moved the alarm (nearly always red on the
+  default, never red on Relaxed). Danger now uses a real performance threshold that is
+  independent of how durations are displayed.
 
 ---
 
