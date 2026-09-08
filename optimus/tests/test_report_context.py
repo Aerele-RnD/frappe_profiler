@@ -410,6 +410,24 @@ class TestPhase2RunsShape:
 		assert fn["indent"] == 0
 		assert len(fn["lines"]) == 1
 
+	def test_zero_per_hit_display_matches_populated_spacing(self):
+		# A per_hit=0 line must format through _ms_display like a populated one
+		# ("0.0000ms"), not a hard-coded "0.00 ms" with a stray space and coarser
+		# precision.
+		results = [{
+			"dotted_path": "x.y.fn", "qualname": "fn", "file": "/abs/x.py",
+			"lines": [
+				{"lineno": 1, "content": "def fn():", "hits": 0, "total_ms": 0.0, "per_hit_us": 0},
+				{"lineno": 2, "content": "    work()", "hits": 1, "total_ms": 1.234, "per_hit_us": 1234},
+			],
+		}]
+		out = build_report_context(
+			_doc(phase_2_runs=[self._phase2_run(results=results)]), _ctx()
+		)
+		lines = out["line_drilldown_runs"][0]["functions"][0]["lines"]
+		assert lines[0]["per_hit_display"] == "0.0000ms"
+		assert " ms" not in lines[0]["per_hit_display"]  # no stray space
+
 
 class TestActionPlanShape:
 	def test_step_has_contract_fields(self):
@@ -707,3 +725,36 @@ class TestHowToReadItems:
 		# J.1 leaves how_to_read_items=None; template falls back to default.
 		out = build_report_context(_doc(), _ctx())
 		assert out["how_to_read_items"] is None
+
+
+class TestFrontendKpiRollover:
+	"""The frontend summary KPI tiles roll over to seconds at the configured
+	threshold instead of stamping a hard-coded "ms" next to numbers the rest of
+	the report shows in seconds."""
+
+	def _frontend(self, summary, threshold_ms):
+		ctx = _ctx(
+			frontend_summary=summary,
+			render_config={"large_duration_threshold_ms": threshold_ms},
+		)
+		fe = report_context._build_frontend(ctx)
+		return {tile["label"]: tile for tile in fe["kpis"]}
+
+	def test_tile_rolls_over_to_seconds(self):
+		tiles = self._frontend(
+			{"total_xhrs": 3, "total_xhr_ms": 5234,
+			 "total_backend_ms": 4000, "network_overhead_ms": 120},
+			1000,
+		)
+		assert (tiles["XHR total"]["value"], tiles["XHR total"]["unit"]) == ("5.23", "s")
+		assert (tiles["Backend total"]["value"], tiles["Backend total"]["unit"]) == ("4.00", "s")
+		# Sub-second value stays in ms.
+		assert (tiles["Network overhead"]["value"], tiles["Network overhead"]["unit"]) == ("120", "ms")
+
+	def test_disabled_threshold_keeps_tiles_in_ms(self):
+		tiles = self._frontend(
+			{"total_xhrs": 1, "total_xhr_ms": 5234,
+			 "total_backend_ms": 0, "network_overhead_ms": 0},
+			0,
+		)
+		assert (tiles["XHR total"]["value"], tiles["XHR total"]["unit"]) == ("5234", "ms")

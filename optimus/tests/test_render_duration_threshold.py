@@ -11,6 +11,7 @@ import types
 from unittest.mock import patch
 
 from optimus import renderer
+from optimus.renderer._internal import _reformat_durations_in_text
 from optimus.settings import OptimusConfig
 
 
@@ -117,6 +118,34 @@ class TestDisabledThresholdHonouredEverywhere:
 		# Nothing rolls over: the raw ms form survives, no seconds anywhere.
 		assert "5234ms" in html
 		assert "5.23s" not in html
+
+
+class TestUrlsAreNotMangled:
+	"""``_reformat_durations_in_text`` rewrites <n>ms duration tokens in prose,
+	but a browser-reported URL (frontend findings embed these in titles /
+	descriptions / notes) can contain the same pattern. It must be left intact so
+	links don't break."""
+
+	def test_real_duration_converts_url_stays_intact(self):
+		text = "LCP 1600ms on /app/report/query-2000ms-test"
+		out = _reformat_durations_in_text(text, 1000.0)
+		# The real duration rolls over; the URL segment is untouched.
+		assert out == "LCP 1.60s on /app/report/query-2000ms-test"
+
+	def test_href_query_param_not_rewritten(self):
+		assert _reformat_durations_in_text("open ?t=1500ms now", 1000.0) == "open ?t=1500ms now"
+
+	def test_path_segment_not_rewritten(self):
+		assert _reformat_durations_in_text("GET /api/2000ms/x", 1000.0) == "GET /api/2000ms/x"
+
+	def test_sentence_final_duration_still_converts(self):
+		assert _reformat_durations_in_text("It took 5234ms.", 1000.0) == "It took 5.23s."
+
+	def test_approx_and_label_prefixes_still_convert(self):
+		# "~" (approx) and ":" (label) are real prose, not URL structure, so a
+		# duration written as "~1500ms" or "latency:1500ms" must still roll over.
+		assert _reformat_durations_in_text("about ~1500ms", 1000.0) == "about ~1.50s"
+		assert _reformat_durations_in_text("latency:1500ms", 1000.0) == "latency:1.50s"
 
 
 class TestDefaultThreshold:

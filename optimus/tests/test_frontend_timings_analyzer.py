@@ -76,6 +76,26 @@ def test_slow_frontend_render_fires_on_lcp():
     assert "took 2800ms for its largest" in slow[0]["customer_description"]
 
 
+def test_lcp_title_rounds_not_truncates():
+    """The baked title must ROUND the duration (like :.0f everywhere else), not
+    truncate with int(). The impact badge renders the raw float via humanize
+    (which rounds), so a truncating title would disagree with the badge by up to
+    1ms / 0.01s once render rolls both over to seconds."""
+    from optimus.analyzers import frontend_timings
+
+    fd = {"xhr": [], "vitals": [
+        {"name": "lcp", "page_url": "/app/x", "timestamp": 1, "value_ms": 2800.7},
+    ]}
+    result = frontend_timings.analyze([], _make_context(fd))
+    slow = [f for f in result.findings if f["finding_type"] == "Slow Frontend Render"]
+    assert len(slow) == 1
+    # Rounded to 2801, not truncated to 2800.
+    assert slow[0]["title"] == "LCP 2801ms on /app/x"
+    assert "took 2801ms for its largest" in slow[0]["customer_description"]
+    # The badge still carries the raw float, so both round to the same value.
+    assert slow[0]["estimated_impact_ms"] == 2800.7
+
+
 def test_network_overhead_fires_on_disproportion():
     """rec-B: XHR 1900ms - backend 180ms = 1720ms delta. 1720 > 500 AND
     1720 > 180 * 1.5 = 270 → fires. Severity: delta > 1000 → Medium."""

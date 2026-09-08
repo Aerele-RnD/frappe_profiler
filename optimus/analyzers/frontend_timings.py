@@ -179,9 +179,9 @@ def analyze(recordings: list[dict], context) -> AnalyzerResult:
         findings.append({
             "finding_type": "Slow Frontend Render",
             "severity": severity,
-            "title": f"LCP {int(lcp)}ms on {page}",
+            "title": f"LCP {lcp:.0f}ms on {page}",
             "customer_description": (
-                f"The page '{page}' took {int(lcp)}ms for its largest "
+                f"The page '{page}' took {lcp:.0f}ms for its largest "
                 "content element to paint. Users typically perceive pages "
                 "as slow beyond 2.5 seconds."
             ),
@@ -212,9 +212,9 @@ def analyze(recordings: list[dict], context) -> AnalyzerResult:
             findings.append({
                 "finding_type": "Network Overhead",
                 "severity": severity,
-                "title": f"{int(delta)}ms network overhead on {m['action_label']}",
+                "title": f"{delta:.0f}ms network overhead on {m['action_label']}",
                 "customer_description": (
-                    f"The browser waited {int(delta)}ms longer than the "
+                    f"The browser waited {delta:.0f}ms longer than the "
                     "server spent processing this request. That extra time "
                     "is network, TLS, serialization, or response download."
                 ),

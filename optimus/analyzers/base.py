@@ -42,7 +42,8 @@ def humanize_duration_ms(ms, threshold_ms: float = 1000.0, decimals: int = 0) ->
 	avoid, and the same duration never rolls over in one place while staying in
 	milliseconds in another that shows it at a different precision. ``decimals``
 	sets the millisecond precision only (the seconds branch always keeps two).
-	Argument order matches ``renderer.time_format._format_duration_ms``.
+	Argument order matches ``renderer.time_format._format_duration_ms`` and
+	``report_context._ms_display``.
 	Defensive: ``None`` or a non-numeric value formats as zero.
 	"""
 	try:
@@ -50,8 +51,17 @@ def humanize_duration_ms(ms, threshold_ms: float = 1000.0, decimals: int = 0) ->
 	except (TypeError, ValueError):
 		v = 0.0
 	if threshold_ms and round(abs(v)) >= threshold_ms:
-		return f"{v / 1000:.2f}s"
-	return f"{v:.{decimals}f}ms"
+		# Divide the whole-millisecond value (same rounding as the decision
+		# above), so a duration formatted straight from the raw float and the
+		# same duration re-parsed from already-rounded "1235ms" finding text
+		# can't disagree by 0.01s at a rounding boundary.
+		return f"{round(v) / 1000:.2f}s"
+	text = f"{v:.{decimals}f}ms"
+	# A value that rounds to zero must not keep a sign: a -0.3ms cross-run
+	# delta reads "0ms", never "-0.00ms".
+	if text.startswith("-") and float(text[:-2]) == 0.0:
+		text = text[1:]
+	return text
 
 
 # Path prefixes we treat as "framework" when picking a representative

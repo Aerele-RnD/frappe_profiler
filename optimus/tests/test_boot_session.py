@@ -136,3 +136,29 @@ class TestWidgetGuard:
 			"flag (e.g. older boot payload without this field) doesn't "
 			"hide the widget fail-open shape"
 		)
+
+
+class TestSessionJsFormatterParity:
+	"""The Desk-side duration formatter (optimus_session.js optimus_fmt_ms) must
+	match the server's humanize rule: the seconds branch divides the WHOLE-
+	millisecond value (Math.round(v)/1000), the same rounding the server uses, so
+	the hot-path picker and the report can't show the same duration as two
+	different seconds strings at a rounding boundary."""
+
+	def _session_js(self):
+		import os
+		path = os.path.join(
+			os.path.dirname(__file__), "..", "optimus", "doctype",
+			"optimus_session", "optimus_session.js",
+		)
+		with open(path) as f:
+			return f.read()
+
+	def test_seconds_branch_divides_whole_ms(self):
+		js = self._session_js()
+		assert "(Math.round(v) / 1000).toFixed(2)" in js, (
+			"optimus_fmt_ms seconds branch must divide the whole-ms value "
+			"(Math.round(v)/1000) to match server humanize_duration_ms"
+		)
+		# The old raw-value form was the cross-surface mismatch; it must be gone.
+		assert "(v / 1000).toFixed(2)" not in js

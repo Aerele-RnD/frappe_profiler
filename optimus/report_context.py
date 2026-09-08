@@ -85,11 +85,16 @@ def _is_user_code(function_or_path, ignored_apps: tuple[str, ...] = ()) -> bool:
 	return True
 
 
-def _ms_display(ms, decimals: int = 0, threshold_ms: float = 1000.0) -> str:
+def _ms_display(ms, threshold_ms: float = 1000.0, decimals: int = 0) -> str:
 	"""Format milliseconds in the report's compact style ("420ms" / "5.00s"):
 	ms (``decimals`` places) below ``threshold_ms``, seconds (2 decimals) at or
 	above. ``threshold_ms`` is the "render durations in seconds above (ms)"
 	setting; ``0`` disables conversion. Returns "" for a ``None`` input.
+
+	Argument order matches ``humanize_duration_ms`` and
+	``time_format._format_duration_ms`` (ms, threshold_ms, decimals) so the three
+	formatters can't be confused for one another; call sites pass both as
+	keywords regardless.
 
 	Delegates the unit decision to ``humanize_duration_ms`` so every duration in
 	the report rolls over at the same point, rounds the same way and reads in the
@@ -97,6 +102,19 @@ def _ms_display(ms, decimals: int = 0, threshold_ms: float = 1000.0) -> str:
 	if ms is None:
 		return ""
 	return humanize_duration_ms(ms, threshold_ms, decimals)
+
+
+def _split_ms_display(ms, threshold_ms: float) -> tuple[str, str]:
+	"""Split the compact display of ``ms`` into (number, unit) so a KPI tile can
+	show the value large and the unit small, while still rolling over to seconds
+	at ``threshold_ms`` like the rest of the report (fixes tiles that used to
+	stamp a hard-coded "ms" next to rolled-over seconds elsewhere)."""
+	s = _ms_display(ms, threshold_ms=threshold_ms)
+	if s.endswith("ms"):
+		return s[:-2], "ms"
+	if s.endswith("s"):
+		return s[:-1], "s"
+	return s, ""
 
 
 # ---------------------------------------------------------------------------
@@ -376,9 +394,11 @@ def _build_line_drilldown_runs(session_doc, threshold_ms: float = 1000.0) -> lis
 					"lineno": line.get("lineno", 0),
 					"hits": line.get("hits", 0),
 					"total_display": _ms_display(line.get("total_ms", 0), decimals=2, threshold_ms=threshold_ms),
-					"per_hit_display": (
-						_ms_display(per_hit_us / 1000, decimals=4, threshold_ms=threshold_ms)
-						if per_hit_us else "0.00 ms"
+					# per_hit_us is always a number (0 when missing), so the empty
+					# case formats through _ms_display too ("0.0000ms"), matching the
+					# populated rows' spacing/precision instead of a "0.00 ms" literal.
+					"per_hit_display": _ms_display(
+						per_hit_us / 1000, decimals=4, threshold_ms=threshold_ms
 					),
 					"source": line.get("content", ""),
 					"is_hot": i == hot_idx,
@@ -753,6 +773,12 @@ def _build_frontend(ctx) -> dict | None:
 			f"slowest {_ms_display(slowest.get('duration_ms', 0) or 0, threshold_ms=threshold_ms)}"
 			if slowest else ""
 		)
+		# The value/unit split lets each tile roll over to seconds at the
+		# configured threshold instead of always stamping "ms" beside numbers
+		# the rest of the report shows in seconds.
+		xhr_val, xhr_unit = _split_ms_display(total_xhr_ms, threshold_ms)
+		backend_val, backend_unit = _split_ms_display(total_backend_ms, threshold_ms)
+		net_val, net_unit = _split_ms_display(net_overhead, threshold_ms)
 		kpis = [
 			{
 				"label": "XHRs",
@@ -764,24 +790,24 @@ def _build_frontend(ctx) -> dict | None:
 			},
 			{
 				"label": "XHR total",
-				"value": f"{total_xhr_ms:.0f}",
-				"unit": "ms",
+				"value": xhr_val,
+				"unit": xhr_unit,
 				"sub_html": "",
 				"value_kind": "normal",
 				"sub_is_warn": False,
 			},
 			{
 				"label": "Backend total",
-				"value": f"{total_backend_ms:.0f}",
-				"unit": "ms",
+				"value": backend_val,
+				"unit": backend_unit,
 				"sub_html": "",
 				"value_kind": "normal",
 				"sub_is_warn": False,
 			},
 			{
 				"label": "Network overhead",
-				"value": f"{net_overhead:.0f}",
-				"unit": "ms",
+				"value": net_val,
+				"unit": net_unit,
 				"sub_html": slowest_sub,
 				"value_kind": "warn" if net_overhead > 500 else "normal",
 				"sub_is_warn": False,

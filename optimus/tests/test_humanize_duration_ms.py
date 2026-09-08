@@ -94,3 +94,34 @@ class TestDefensive:
 
 	def test_negative_above_threshold_absolute(self):
 		assert humanize_duration_ms(-5234) == "-5.23s"
+
+
+class TestRoundingBoundaryAgreement:
+	"""The seconds value is computed from the whole-millisecond number, so a
+	duration formatted straight from the raw float (a finding's impact badge)
+	and the same duration re-parsed from already-rounded "1235ms" finding text
+	(the title) can't disagree by 0.01s at a rounding boundary."""
+
+	def test_raw_float_and_rounded_ms_agree(self):
+		# 1234.99 (raw impact) rounds to 1235ms (baked title); both must render
+		# the same string, not "1.23s" vs "1.24s".
+		assert humanize_duration_ms(1234.99) == humanize_duration_ms(1235.0)
+
+	def test_fractional_ms_matches_its_rounded_int(self):
+		for raw in (1500.4, 1500.6, 2749.5, 999.6):
+			assert humanize_duration_ms(raw) == humanize_duration_ms(round(raw))
+
+
+class TestNegativeZero:
+	"""A value that ROUNDS to zero at the display precision must never keep a
+	negative sign: a sub-precision cross-run improvement reads "0ms", not
+	"-0.00ms". A genuine negative still keeps its sign."""
+
+	def test_negative_rounding_to_zero_drops_sign(self):
+		assert humanize_duration_ms(-0.001, decimals=2) == "0.00ms"
+		assert humanize_duration_ms(-0.3) == "0ms"           # decimals=0 rounds to 0
+		assert humanize_duration_ms(-0.4, decimals=0) == "0ms"
+
+	def test_genuine_negative_keeps_sign(self):
+		assert humanize_duration_ms(-0.3, decimals=2) == "-0.30ms"
+		assert humanize_duration_ms(-5.0, decimals=2) == "-5.00ms"

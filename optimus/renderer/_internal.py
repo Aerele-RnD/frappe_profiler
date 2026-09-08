@@ -238,7 +238,18 @@ def _get_jinja_env() -> Environment:
 # summary): an integer or decimal immediately followed by "ms". Duration
 # formatting is a render-time concern, so these raw-ms tokens are reformatted
 # here (see _reformat_durations_in_text), never baked at analyze time.
-_MS_TOKEN_RE = re.compile(r"(?<![\w.])(\d+(?:\.\d+)?)\s?ms\b")
+#
+# The look-behind / look-ahead reject the URL-structural characters that would
+# put the token inside a browser-reported URL (path "/", slug "-", query "?" "="
+# "&", fragment "#") on either side, so "query-2000ms-test" and "?t=1500ms" are
+# left intact rather than rewritten into broken links. Deliberately NOT rejected:
+# "~" and ":" (an approx "~1500ms" or a label "latency:1500ms" is real prose that
+# must still roll over). A trailing "." is allowed (sentence-final "5234ms.") but
+# not "ms.<word>" (a "2000ms.html" filename), so real prose still converts.
+_URL_CHARS = r"\w./=?&#-"
+_MS_TOKEN_RE = re.compile(
+	r"(?<![" + _URL_CHARS + r"])(\d+(?:\.\d+)?)\s?ms(?![\w/=?&#-])(?!\.\w)"
+)
 
 
 def _reformat_durations_in_text(text: str, threshold_ms: float) -> str:
@@ -527,8 +538,11 @@ def render(
 		# only re-renders on Regenerate Reports / Retry Analyze the stamp
 		# means a user opening an old file can immediately tell whether the
 		# settings they expect are actually baked in.
+		# Already resolved on the config (explicit 0 preserved, missing → 1000),
+		# so read it straight. This value is snapshotted into render_config below
+		# and is the single threshold the whole render uses.
 		_large_duration_threshold_ms = float(
-			getattr(_cfg, "large_duration_threshold_ms", 1000.0) or 0.0
+			getattr(_cfg, "large_duration_threshold_ms", 1000.0)
 		)
 		render_config = {
 			"hide_framework_tables": _hide_framework_tables,

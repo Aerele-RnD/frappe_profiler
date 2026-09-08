@@ -16,14 +16,14 @@ def boot_session(bootinfo):
 	# One config read supplies both values. The "render durations in seconds
 	# above (ms)" threshold lets Desk form scripts (the Optimus Session hot-path
 	# picker) roll durations over to seconds at the same point the report does.
-	# An explicit 0 (disable the rollover) is preserved; only a missing value
-	# falls back to 1000ms. Fails open (widget visible, default threshold).
+	# ``cfg.large_duration_threshold_ms`` is already resolved (an explicit 0 to
+	# disable the rollover is preserved; a missing value is the 1000 default), so
+	# it is read straight. Fails open (widget visible, default threshold).
 	try:
 		from optimus.settings import get_config
 		cfg = get_config()
 		bootinfo.optimus_enabled = bool(cfg.enabled)
-		_t = cfg.large_duration_threshold_ms
-		bootinfo.optimus_large_duration_threshold_ms = float(1000.0 if _t is None else _t)
+		bootinfo.optimus_large_duration_threshold_ms = float(cfg.large_duration_threshold_ms)
 	except Exception:
 		bootinfo.optimus_enabled = True
 		bootinfo.optimus_large_duration_threshold_ms = 1000.0

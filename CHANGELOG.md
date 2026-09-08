@@ -8,6 +8,57 @@ versions may contain breaking changes see migration notes below).
 
 ---
 
+## [0.12.46] - 2026-09-08
+
+### Fixed
+
+- **"Keep every duration in milliseconds" now actually works from Optimus Settings.**
+  Setting "Render durations in seconds above (ms)" to 0 is meant to switch the seconds
+  rollover off, but a stored 0 was being turned back into the 1000 default before any
+  report saw it, so the switch did nothing. A 0 saved in the settings is now preserved
+  all the way through, exactly like the sibling "minimum action duration" field already
+  was, so the whole report stays in milliseconds when you ask it to.
+- **URLs inside a finding no longer get mangled.** The step that rewrites a duration like
+  "1500ms" into "1.50s" was also rewriting the same pattern where it appears inside a
+  browser-reported web address (for example a link ending in "query-2000ms-test" or a
+  "?t=1500ms" query string), which quietly broke the link. It now leaves web addresses
+  alone while still converting real durations in the surrounding text.
+- **The AI fix suggestion sees durations in the same unit as the report.** The context
+  Optimus sends the model was always formatted with the default 1000ms rollover, so on a
+  Strict, Relaxed or "off" profile the model read different numbers than the ones on
+  screen. It now uses the configured threshold.
+- **A cross-run speed improvement is no longer coloured like a warning.** In the line by
+  line comparison between two runs, the change column highlighted every difference of a
+  second or more in the same amber "slow" style, so a 1.6s improvement looked identical to
+  a 1.6s regression. The row already shows green for faster and red for slower, so the
+  change value now stays plain.
+- **A finding's title and its impact badge always agree.** The two were rounded from the
+  duration in slightly different ways, so right on a rounding boundary the title could read
+  "1.24s" while the badge beside it read "1.23s". Both now round the same way, and a
+  sub-millisecond improvement no longer shows as "-0.00ms". The frontend findings (slow
+  render, network overhead) were the worst case here, baking their title with truncation
+  while the badge rounded; they now round like everything else.
+- **The Optimus Session hot-path picker matches the report.** The Desk-side duration
+  formatter rounded to seconds from the raw value while the report now rounds from the whole
+  millisecond, so the picker and the report could show the same duration as "1.23s" in one
+  place and "1.24s" in the other. The picker now rounds the same way.
+- **The frontend summary tiles roll over to seconds too.** The "XHR total", "Backend
+  total" and "Network overhead" tiles always showed milliseconds, so they could read in a
+  different unit than the timings right below them. They now follow the same rollover
+  setting as the rest of the report.
+
+### Internal
+
+- **The seconds-rollover threshold resolves in one place.** The boot payload and the AI fix
+  context each re-implemented the "missing value falls back to 1000" logic; that is now a
+  single accessor (`settings.display_threshold_ms`). The "0 disables it" rule lives once in
+  the settings resolver, and the boot payload and renderer read the already-resolved value
+  straight off the config rather than re-deriving it. (The renderer and the render-config
+  reader still carry a defensive 1000 fallback for a malformed/absent value, so the literal
+  default is not strictly single-sourced.)
+
+---
+
 ## [0.12.45] - 2026-09-06
 
 ### Changed

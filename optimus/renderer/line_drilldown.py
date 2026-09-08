@@ -27,6 +27,7 @@ import json
 import os
 from typing import Any
 
+from optimus.analyzers.base import humanize_duration_ms
 from optimus.renderer.syntax import _highlight_python_snippet
 from optimus.renderer.time_format import _format_duration_ms
 
@@ -279,6 +280,13 @@ def _render_phase2_diff_table(diff_rows: list[dict], threshold_ms: float = 1000.
 			# the sibling per-function table (was previously raw "1500.00").
 			return "" if v is None else _format_duration_ms(v, threshold_ms, decimals=2)
 
+		def _fmt_delta_cell(v):
+			# The row is already tinted green (faster) or red (slower). The delta
+			# value must NOT also carry the amber "time-high" alarm span, or a
+			# 1.6s improvement would look identical to a 1.6s regression. Plain
+			# text, same second-rollover as the other cells.
+			return "" if v is None else humanize_duration_ms(v, threshold_ms, decimals=2)
+
 		_src_html = row.get("content_html")
 		_src = _src_html if _src_html else _e(row.get("content", ""))
 		source_cell = f"<code>{_src}</code>"
@@ -290,7 +298,7 @@ def _render_phase2_diff_table(diff_rows: list[dict], threshold_ms: float = 1000.
 			f'<td class="num">{_fmt(row.get("curr_lineno"))}</td>'
 			f'<td class="num">{_fmt_ms_cell(row.get("prev_ms"))}</td>'
 			f'<td class="num">{_fmt_ms_cell(row.get("curr_ms"))}</td>'
-			f'<td class="num">{_fmt_ms_cell(delta)}</td>'
+			f'<td class="num">{_fmt_delta_cell(delta)}</td>'
 			f'<td class="src">{source_cell}</td>'
 			"</tr>"
 		)
