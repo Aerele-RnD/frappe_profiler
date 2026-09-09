@@ -56,6 +56,7 @@
 ```bash
 cd ~/frappe-bench
 bench get-app https://github.com/Aerele-RnD/optimus.git
+bench setup requirements
 bench --site <your-site> install-app optimus
 bench restart
 ```
