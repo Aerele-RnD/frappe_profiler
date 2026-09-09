@@ -2342,39 +2342,73 @@
   </div>
   {% endif %}
 
-  {# v0.7.x J.14: companion-tool promotional banner. Featured-card
-     treatment with light-blue gradient background, serif product name,
-     bulleted value props and a solid-blue CTA button. Inert anchor
-     only, no remote assets, no external CSS - the self-contained-HTML
-     guarantee stays intact. #}
-  <aside class="section lens-promo" style="
-      margin: 16px 0 24px;
-      padding: 20px 24px;
-      background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-      border: 1px solid #bfdbfe;
-      border-left: 4px solid #2563eb;
-      border-radius: 4px;
-  ">
-    <div style="display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
-      <div style="display:flex; align-items:center; gap:12px;">
-        <span style="font-family: var(--serif, Georgia, serif); font-size:1.45rem; font-weight:600; color:#1e3a8a; letter-spacing:-0.01em;">Aerele Lens</span>
-        <span style="font-size:0.65rem; text-transform:uppercase; letter-spacing:0.14em; font-weight:700; color:#1e40af; padding:3px 8px; background:#dbeafe; border-radius:3px;">Companion tool</span>
+  {# "Try our other AI tools": a matched pair of promo cards (Jarvis + Lens)
+     rendered side by side from the companion_tools list below, so one source
+     drives both cards and they cannot drift. Wraps to a stack on narrow widths
+     and in print. Both cards use the Jarvis brand violet, hardcoded here as
+     jv_* because the report ships a single light theme and these are not
+     :root tokens; the report's own --display serif and --ink / --ink-soft /
+     --ink-mute / --mono text tokens are reused. Inert anchors only, no remote
+     assets, no external CSS - the self-contained-HTML guarantee stays intact.
+     Distinct jarvis-promo / lens-promo classes keep each card's "exactly once"
+     + self-containment tests independent. #}
+  {%- set jv_violet = "#6e56e6" -%}
+  {%- set jv_bg = "#efebf9" -%}
+  {%- set jv_border = "#dad2f0" -%}
+  {%- set companion_tools = [
+    {
+      "cls": "jarvis-promo",
+      "name": "Jarvis",
+      "url": "jarvis.aerele.in",
+      "href": "https://jarvis.aerele.in/",
+      "cta": "Try Jarvis",
+      "logo": '<span aria-hidden="true" style="display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:8px; background:linear-gradient(135deg,#6e8bff,#8b5cf6); flex:0 0 auto;"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5 L14 10 L21.5 12 L14 14 L12 21.5 L10 14 L2.5 12 L10 10 Z" fill="#ffffff"/></svg></span>',
+      "tagline": "Give your business an <strong>AI teammate</strong>.",
+      "bullets": [
+        "Connect your <strong>chat subscriptions</strong>, <strong>API keys</strong> or <strong>local AI models</strong>.",
+        "<strong>Ask questions</strong> and get answers directly from your ERPNext data.",
+        "You make the call. <strong>Jarvis does the work</strong>.",
+      ],
+    },
+    {
+      "cls": "lens-promo",
+      "name": "Lens",
+      "url": "lens.aerele.in",
+      "href": "https://lens.aerele.in/",
+      "cta": "Try Lens",
+      "logo": '<span aria-hidden="true" style="display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; flex:0 0 auto;"><svg viewBox="2 4 54 54" width="26" height="26" fill="none" aria-hidden="true"><g stroke="#0a1a3f" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"><path d="M 12 24 L 38 24 A 14 14 0 1 0 35.5 32 L 51 47.5"></path></g></svg></span>',
+      "tagline": "Audit your Frappe ERPNext custom apps <strong>before production</strong>.",
+      "bullets": [
+        "Static checks for <strong>performance regressions</strong>, <strong>security gaps</strong> and framework mis-use.",
+        "<strong>ERPNext convention drift</strong> detection.",
+        "<strong>Version-compatibility scans</strong> for Frappe v14&nbsp;/&nbsp;v15&nbsp;/&nbsp;v16 migrations.",
+      ],
+    },
+  ] -%}
+  <div style="font-size:11px; letter-spacing:0.2em; text-transform:uppercase; color:var(--ink-mute); font-weight:600; margin:16px 0 10px;">Try our other AI tools</div>
+  <div class="companion-tools" style="display:flex; flex-wrap:wrap; gap:16px; margin:0 0 24px; align-items:stretch;">
+    {%- for tool in companion_tools %}
+    <aside class="section {{ tool.cls }}" style="flex:1 1 320px; margin:0; padding:20px 22px; background:{{ jv_bg }}; border:1px solid {{ jv_border }}; border-left:3px solid {{ jv_violet }}; border-radius:4px; box-shadow:none; display:flex; flex-direction:column;">
+      <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+        <span style="display:flex; align-items:center; gap:11px; min-width:0;">
+          {{ tool.logo | safe }}
+          <span style="font-family:var(--display); font-size:1.35rem; font-weight:600; color:var(--ink); letter-spacing:-0.01em;">{{ tool.name }}</span>
+        </span>
+        <span style="font-size:0.75rem; color:var(--ink-mute); font-family:var(--mono);">{{ tool.url }}</span>
       </div>
-      <span style="font-size:0.78rem; color:#475569; font-family:var(--mono, monospace);">lens.aerele.in</span>
-    </div>
-    <p style="margin:0 0 12px; font-size:1rem; color:#0f172a; line-height:1.5;">
-      Audit your Frappe ERPNext custom apps <strong>before they break in production</strong>.
-    </p>
-    <ul style="margin:0 0 14px; padding-left:20px; color:#1f2937; font-size:0.88rem; line-height:1.7;">
-      <li>Static checks for <strong>performance regressions</strong>, <strong>security gaps</strong> and framework mis-use.</li>
-      <li><strong>ERPNext convention drift</strong> detection.</li>
-      <li><strong>Version-compatibility scans</strong> for Frappe v14&nbsp;/&nbsp;v15&nbsp;/&nbsp;v16 migrations.</li>
-    </ul>
-    <a href="https://lens.aerele.in/" rel="noopener"
-       style="display:inline-block; padding:9px 18px; background:#2563eb; color:#ffffff !important; text-decoration:none; font-weight:600; font-size:0.88rem; border-radius:4px; letter-spacing:0.02em;">
-      Try Aerele Lens &rarr;
-    </a>
-  </aside>
+      <p style="margin:0 0 12px; font-size:0.95rem; color:var(--ink); line-height:1.5;">{{ tool.tagline | safe }}</p>
+      <ul style="margin:0 0 16px; padding-left:20px; color:var(--ink-soft); font-size:0.85rem; line-height:1.65;">
+        {%- for bullet in tool.bullets %}
+        <li>{{ bullet | safe }}</li>
+        {%- endfor %}
+      </ul>
+      <a href="{{ tool.href }}" target="_blank" rel="noopener" aria-label="{{ tool.cta }}, opens in a new tab"
+         style="margin-top:auto; align-self:flex-start; padding:8px 16px; background:{{ jv_violet }}; color:#ffffff !important; text-decoration:none; font-weight:600; font-size:0.85rem; border-radius:4px; letter-spacing:0.02em;">
+        {{ tool.cta }} &rarr;
+      </a>
+    </aside>
+    {%- endfor %}
+  </div>
 
   {# v0.6.0: compact in-page navigation. Conditional sections (Background
      jobs / Server Resource / Frontend) link only when they'll render.

@@ -8,6 +8,32 @@ versions may contain breaking changes see migration notes below).
 
 ---
 
+## [0.12.45] - 2026-09-09
+
+### Added
+
+- **"Try our other AI tools" section, pairing Jarvis with Aerele Lens.** The report now shows
+  both tools as a matched side-by-side pair under the Jump-to nav. Jarvis (jarvis.aerele.in)
+  is introduced as an AI teammate for your business that connects your chat subscriptions,
+  API keys or local AI models and answers questions from your ERPNext data, so you make the
+  call and Jarvis does the work.
+- **Product logo on each companion card.** The Jarvis spark mark and the Aerele Lens
+  magnifier mark are both drawn inline as SVG, so the marks ship inside the report with no
+  remote assets and the saved-HTML offline guarantee is untouched.
+
+### Changed
+
+- **Companion cards now use the Jarvis brand colour.** Both the Jarvis and Aerele Lens cards
+  use the violet from jarvis.aerele.in (a light violet tint background with a violet rail and
+  call-to-action), so they read as one matched pair. Each card keeps the report's Fraunces
+  display serif and hairline rules and wraps to a stack on narrow widths and in print.
+- **Companion links open in a new tab.** Each call-to-action now carries
+  `target="_blank"` (with `rel="noopener"`), so a click opens the product site in a new tab
+  instead of navigating away from the report. Each link is labelled so screen readers
+  announce that it opens in a new tab.
+
+---
+
 ## [0.12.44] - 2026-09-05
 
 ### Fixed
