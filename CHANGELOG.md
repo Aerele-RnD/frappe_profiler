@@ -21,8 +21,15 @@ versions may contain breaking changes see migration notes below).
   single self-managed banner element in place (the same pattern already used for the
   background-jobs drain banner), styled with Frappe's native `.form-message.blue`
   theme classes so it fits the desk UI in light and dark mode. It is removed when
-  the session reaches Ready or Failed and also cleared on every form refresh so a
-  stale bar cannot linger when you navigate to another session.
+  the session reaches Ready or Failed and on any refresh that shows a different or
+  a new session (it is tagged with its owning session), so a stale bar cannot
+  linger when you navigate away, while the banner for the session you are watching
+  keeps updating in place.
+- **The Phase 2 "Line profiling is armed" notice no longer stacks either.** It was
+  painted with `frm.set_intro`, which routes to the same `show_message` that appends
+  rather than replaces, so refreshing while a pass was Recording piled up duplicate
+  orange notices. It now uses the same single in-place banner helper and Frappe's
+  native orange theme.
 
 ---
 

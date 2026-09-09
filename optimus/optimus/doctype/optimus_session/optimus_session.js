@@ -47,46 +47,69 @@ function render_ai_buttons(frm) {
 	});
 }
 
-// One self-managed "preparing report" banner element, updated in place. Frappe's
-// frm.dashboard.set_headline APPENDS a fresh .form-message on every call in this
-// version (frappe/public/js/frappe/form/layout.js show_message never clears the
-// container for non-empty html), so driving it from the per-tick optimus_progress
-// event stacked one bar per tick instead of updating one. This keeps a single
-// element and rewrites its contents. Pass html=null to remove it. It mirrors
-// _drain_banner's single-element mechanism (and, like it, is cleared on every
-// refresh by render_analyze_progress so a stale bar can't linger on another
-// session), but styles itself with Frappe's native .form-message.blue theme
-// classes rather than inline colours.
-function _progress_banner(frm, html) {
+// Shared single-banner mechanism for the in-form status banners (analyze
+// "preparing report" and background-jobs drain). Frappe's frm.set_intro and
+// frm.dashboard.set_headline both route to layout.js show_message, which APPENDS
+// a fresh .form-message on every non-null call rather than replacing the previous
+// one (layout.js: $html ... appendTo(this.message)), so driving either from a
+// per-tick event stacked one bar per tick instead of updating one. This keeps a
+// single element found and removed by `idClass` (which must be unique to this
+// banner) and rewrites its contents in place, returning it so the caller can tag
+// it. Pass html=null to remove it. `extraClasses` are added only when the element
+// is created (e.g. Frappe theme classes); `styler` runs once on a freshly created
+// element whose classes do not carry its colours. The element is prepended to
+// .form-layout, outside .form-message-container, so Frappe's own show_message()
+// clearing on each refresh never removes it.
+function _single_banner(frm, idClass, extraClasses, html, styler) {
 	const root = frm.$wrapper;
-	if (!root || !root.length) return;
+	if (!root || !root.length) return null;
 	if (html == null) {
-		root.find(".optimus-analyze-banner").remove();
-		return;
+		root.find("." + idClass).remove();
+		return null;
 	}
-	let $b = root.find(".optimus-analyze-banner");
+	let $b = root.find("." + idClass);
 	if (!$b.length) {
-		// Reuse Frappe's native .form-message.blue look (same padding, font
-		// size, blue scheme + dark-theme variants) so this matches the bar the
-		// old set_headline produced. It lives outside .form-message-container,
-		// so Frappe's show_message() clearing on each refresh never removes it.
-		$b = $('<div class="optimus-analyze-banner form-message blue"></div>');
+		const cls = extraClasses ? idClass + " " + extraClasses : idClass;
+		$b = $('<div class="' + cls + '"></div>');
+		if (styler) styler($b);
 		const $host = root.find(".form-layout").first();
 		($host.length ? $host : root).prepend($b);
 	}
 	$b.html(html);
+	return $b;
 }
 
-// Clear a stale progress banner on refresh / navigation. Live analyze progress
-// re-creates it via the optimus_progress handler, so whenever the shown session
-// is not Analyzing (a Ready / Failed session, or a different one you navigated
-// to) the banner must not linger. The ready / failed handlers also remove it,
-// but they are gated by mine(p) and Frappe reuses one frm object across
-// sessions of this doctype, so without this a banner left by session A would
-// stick when you switch to session B. Mirrors render_drain_progress.
+// The analyze "preparing report" banner. Uses Frappe's native .form-message.blue
+// theme (same padding, font size, blue scheme plus dark-theme variants) so it
+// matches the bar the old set_headline produced, no inline styling needed. It is
+// tagged with the owning session so render_analyze_progress can drop it once the
+// form shows a different or a new session. Pass html=null to remove it.
+function _progress_banner(frm, html) {
+	const $b = _single_banner(frm, "optimus-analyze-banner", "form-message blue", html);
+	if ($b) $b.attr("data-optimus-session", frm.doc.session_uuid || "");
+}
+
+// Clear a stale analyze banner on refresh / navigation. The banner is prepended
+// to .form-layout, which Frappe reuses across sessions of this doctype (in-app
+// navigation keeps one frm and one $wrapper), so a banner painted for session A
+// outlives the move to another form. It must be dropped on refresh unless the
+// shown form is that same session still analyzing, so three cases clear it: a new
+// unsaved form (is_new, which never emits progress to self-correct), a
+// Ready / Failed session and a different Analyzing session (which would otherwise
+// show session A's stale percentage until its own first tick). Live progress
+// repaints the banner via the optimus_progress handler, so clearing here never
+// hides current progress. The ready / failed handlers also remove it but are
+// gated by mine(p) and never fire for the form you navigate to.
 function render_analyze_progress(frm) {
-	if (frm.is_new()) return;
-	if (frm.doc.status !== "Analyzing") {
+	const root = frm.$wrapper;
+	if (!root || !root.length) return;
+	const $b = root.find(".optimus-analyze-banner");
+	if (!$b.length) return;
+	const owns_live_analyze =
+		!frm.is_new() &&
+		frm.doc.status === "Analyzing" &&
+		$b.attr("data-optimus-session") === frm.doc.session_uuid;
+	if (!owns_live_analyze) {
 		_progress_banner(frm, null);
 	}
 }
@@ -230,9 +253,21 @@ function _refill_ai_call(frm) {
 // from phase-1) plus a free-form textbox for dotted paths the user types.
 // Submission posts to api.start_line_profile_pass; realtime events drive
 // the form's Phase-2 history child table updates.
+// The Phase 2 "line profiling is armed" banner. Same in-place mechanism as the
+// analyze banner (see _single_banner); frm.set_intro appended a duplicate on every
+// refresh while a pass was Recording. Uses Frappe's native orange form-message
+// theme. Pass html=null to remove it.
+function _phase2_armed_banner(frm, html) {
+	_single_banner(frm, "optimus-phase2-armed", "form-message orange", html);
+}
+
 function render_phase2_button(frm) {
-	if (frm.is_new()) return;
-	if (frm.doc.status !== "Ready") return;
+	if (frm.is_new() || frm.doc.status !== "Ready") {
+		// Not a Ready session (or unsaved): drop any armed banner left in the
+		// reused form wrapper by a session that was mid-Recording.
+		_phase2_armed_banner(frm, null);
+		return;
+	}
 
 	// If there's an in-flight Recording row, surface Stop as the primary
 	// affordance that's what the user is looking for after they've
@@ -272,19 +307,21 @@ function render_phase2_button(frm) {
 		// v0.7.x: a Recording pass does nothing until the flow re-executes and
 		// the pass is stopped. Auto-arm (and the picker) leave users staring at
 		// a Stop button with no context spell out the two steps.
-		frm.set_intro(
+		// One in-place banner; set_intro appended a duplicate on every refresh in
+		// this Frappe version (see _single_banner).
+		_phase2_armed_banner(
+			frm,
 			__(
 				"🔬 Line profiling is armed. Re-run your flow now so the hot " +
 				"path(s) execute again, then click \"Stop Phase 2 Run\" above " +
 				"the report will then pinpoint the exact hot line(s). " +
 				"(Profiling has to re-execute your code; it can't replay the " +
 				"original run.)"
-			),
-			"orange"
+			)
 		);
 	} else {
 		// Clear the armed banner once no pass is Recording (e.g. after Stop).
-		frm.set_intro(null);
+		_phase2_armed_banner(frm, null);
 	}
 
 	// Surface a Retry button for any Phase 2 Run row stuck in Analyzing
@@ -927,20 +964,12 @@ function _drain_suffix(d) {
 	return win ? __(" · up to {0}", [win]) : "";
 }
 
-// One self-managed banner element updated in place. frm.set_intro /
-// frm.dashboard.set_headline both APPEND a dismissible .form-message in this
-// Frappe version, so polling them stacked a new bar every tick. Pass
-// html=null to remove it.
+// The background-jobs drain banner. Same single-element mechanism as the analyze
+// banner (see _single_banner); it keeps its own orange inline styling rather than
+// a .form-message theme class. Pass html=null to remove it.
 function _drain_banner(frm, html) {
-	const root = frm.$wrapper;
-	if (!root || !root.length) return;
-	if (html == null) {
-		root.find(".optimus-drain-banner").remove();
-		return;
-	}
-	let $b = root.find(".optimus-drain-banner");
-	if (!$b.length) {
-		$b = $('<div class="optimus-drain-banner"></div>').css({
+	_single_banner(frm, "optimus-drain-banner", "", html, ($b) =>
+		$b.css({
 			padding: "10px 14px",
 			margin: "8px",
 			background: "#fff7ed",
@@ -948,11 +977,8 @@ function _drain_banner(frm, html) {
 			"border-radius": "6px",
 			color: "#9a3412",
 			"font-size": "0.9rem",
-		});
-		const $host = root.find(".form-layout").first();
-		($host.length ? $host : root).prepend($b);
-	}
-	$b.html(html);
+		})
+	);
 }
 
 // While the session drains the flow's background jobs after Stop, poll the
