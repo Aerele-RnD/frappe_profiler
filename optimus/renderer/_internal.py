@@ -252,10 +252,13 @@ def _get_jinja_env() -> Environment:
 # not "ms.<word>" (a "2000ms.html" filename), so real prose still converts. "," is
 # also rejected on the left so a thousands-grouped duration ("2,000ms", which
 # AI-humanized notes can produce) is left whole instead of matching only the
-# trailing "000ms" group and collapsing to "2,0ms".
+# trailing "000ms" group and collapsing to "2,0ms". The second look-behind
+# rejects a group preceded by <digit><whitespace> so a SPACE- / NBSP- /
+# narrow-NBSP-grouped thousands ("2 000ms") is protected the same way (a plain
+# " 5234ms" still converts because the space there follows a non-digit).
 _URL_CHARS = r"\w.,/=?&#-"
 _MS_TOKEN_RE = re.compile(
-	r"(?<![" + _URL_CHARS + r"])(\d+(?:\.\d+)?)\s?ms(?![\w/=?#-])(?!\.\w)"
+	r"(?<![" + _URL_CHARS + r"])(?<!\d\s)(\d+(?:\.\d+)?)\s?ms(?![\w/=?#-])(?!\.\w)"
 )
 # Split HTML into text runs and whole tags so the token rewrite never reaches
 # inside a tag. The same helper reformats both plain-text finding titles and
@@ -561,11 +564,13 @@ def render(
 		# means a user opening an old file can immediately tell whether the
 		# settings they expect are actually baked in.
 		# Already resolved on the config (explicit 0 preserved, missing → 1000),
-		# so read it straight. This value is snapshotted into render_config below
-		# and is the single threshold the whole render uses.
-		_large_duration_threshold_ms = float(
-			getattr(_cfg, "large_duration_threshold_ms", 1000.0)
-		)
+		# so read it straight. Guard a present-but-None value too: float(None)
+		# would raise inside this broad try/except and silently reset the ENTIRE
+		# render_config (AI toggles, hide-framework, tracked/ignored apps, profile)
+		# to defaults for this render, not just the threshold. Snapshotted below as
+		# the single threshold the whole render uses.
+		_t = getattr(_cfg, "large_duration_threshold_ms", 1000.0)
+		_large_duration_threshold_ms = 1000.0 if _t is None else float(_t)
 		render_config = {
 			"hide_framework_tables": _hide_framework_tables,
 			"tracked_apps": tuple(getattr(_cfg, "tracked_apps", ()) or ()),

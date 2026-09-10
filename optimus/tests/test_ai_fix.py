@@ -231,6 +231,22 @@ class TestBuildMessages:
 		assert "5234ms" in disabled[0]["content"]
 		assert "5.23s" not in disabled[0]["content"]
 
+	def test_title_and_description_durations_are_humanized(self):
+		# The baked title / description carry raw ms; they must be reformatted with
+		# the threshold so the model reads them in the same unit as the report,
+		# not "5234ms" beside a humanized "~5.23s" impact.
+		finding = {
+			"finding_type": "Slow Query",
+			"title": "Slow query: 5234ms",
+			"customer_description": "One query took 5234ms.",
+			"estimated_impact_ms": 5234.0,
+		}
+		_, msgs = ai_fix._build_messages(finding, threshold_ms=1000.0)
+		content = msgs[0]["content"]
+		assert "Slow query: 5.23s" in content
+		assert "One query took 5.23s." in content
+		assert "5234ms" not in content  # no raw ms leaks to the model
+
 	def test_source_window_lead_in_demands_verbatim(self):
 		# When code IS shown, the user message must spell out that any
 		# "before" snippet has to be a verbatim copy of those lines.

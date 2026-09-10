@@ -1109,10 +1109,17 @@ def _build_messages(finding: dict, *, threshold_ms: float = 1000.0) -> tuple[str
 	if type_hint:
 		parts.append(f"What this finding type means / how it's usually fixed in Frappe: {type_hint}")
 	parts.append(f"Severity: {finding.get('severity') or 'Unknown'}")
+	# The title / description carry analyzer-baked raw-ms durations; reformat them
+	# through the same render-time helper (and threshold) the report uses, so the
+	# model reads "5.23s" here just like the report shows, not "5234ms" beside a
+	# humanized "~5.23s" impact. Lazy import keeps this module frappe-free.
+	from optimus.renderer._internal import _reformat_durations_in_text
 	if finding.get("title"):
-		parts.append(f"Title: {finding['title']}")
+		parts.append(f"Title: {_reformat_durations_in_text(finding['title'], threshold_ms)}")
 	if finding.get("customer_description"):
-		parts.append(f"Description: {finding['customer_description']}")
+		parts.append(
+			f"Description: {_reformat_durations_in_text(finding['customer_description'], threshold_ms)}"
+		)
 	impact = finding.get("estimated_impact_ms")
 	if impact:
 		parts.append(f"Estimated impact: ~{humanize_duration_ms(float(impact), threshold_ms=threshold_ms)}")

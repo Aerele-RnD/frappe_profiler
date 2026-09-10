@@ -126,6 +126,11 @@ class TestNegativeZero:
 		assert humanize_duration_ms(-0.3, decimals=2) == "-0.30ms"
 		assert humanize_duration_ms(-5.0, decimals=2) == "-5.00ms"
 
+	def test_seconds_branch_drops_negative_zero(self):
+		# A negative value that rolls to seconds but rounds to zero there reads
+		# "0.00s", not "-0.00s" (reachable only at an unusually low threshold).
+		assert humanize_duration_ms(-1, threshold_ms=1) == "0.00s"
+
 
 class TestNonFiniteInput:
 	"""inf / nan / an overflowing value format as zero (the "non-numeric -> zero"

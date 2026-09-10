@@ -85,6 +85,22 @@ class TestBootSession:
 		boot.boot_session(bootinfo)
 		assert bootinfo.optimus_large_duration_threshold_ms == 500.0
 
+	def test_threshold_failure_does_not_flip_enabled(self, monkeypatch):
+		# The enabled flag and the threshold are read independently, so a failure
+		# resolving the threshold must NOT flip a deliberately-disabled Optimus
+		# back on (they used to share one try/except).
+		from optimus import boot, settings
+		monkeypatch.setattr(settings, "get_config", lambda: _cfg(False))
+
+		def boom():
+			raise RuntimeError("threshold read failed")
+
+		monkeypatch.setattr(settings, "display_threshold_ms", boom)
+		bootinfo = _fresh_bootinfo()
+		boot.boot_session(bootinfo)
+		assert bootinfo.optimus_enabled is False  # not flipped to True
+		assert bootinfo.optimus_large_duration_threshold_ms == 1000.0  # fell back
+
 	def test_threshold_zero_is_preserved_not_defaulted(self, monkeypatch):
 		# An explicit 0 disables the seconds rollover; it must reach the client
 		# as 0, not be silently bumped to 1000, so the desk picker matches a

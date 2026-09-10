@@ -173,6 +173,15 @@ class TestUrlsAreNotMangled:
 		assert _reformat_durations_in_text("waited 2,000ms total", 1000.0) == "waited 2,000ms total"
 		assert _reformat_durations_in_text("It took 1,500ms here", 500.0) == "It took 1,500ms here"
 
+	def test_space_grouped_duration_is_not_corrupted(self):
+		# Same bug class as the comma: a SPACE- / NBSP- / narrow-NBSP-grouped
+		# thousands ("2 000ms") must stay whole, not collapse to "2 0ms". A plain
+		# " 5234ms" (the space follows a non-digit) still converts.
+		for sep in (" ", "\u00a0", "\u202f"):  # space, NBSP, narrow NBSP
+			text = f"waited 2{sep}000ms total"
+			assert _reformat_durations_in_text(text, 1000.0) == text
+		assert _reformat_durations_in_text("done in 5234ms", 1000.0) == "done in 5.23s"
+
 
 class TestDefaultThreshold:
 	def test_slow_row_renders_in_seconds(self):

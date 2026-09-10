@@ -62,11 +62,14 @@ def humanize_duration_ms(ms, threshold_ms: float = 1000.0, decimals: int = 0) ->
 		# above), so a duration formatted straight from the raw float and the
 		# same duration re-parsed from already-rounded "1235ms" finding text
 		# can't disagree by 0.01s at a rounding boundary.
-		return f"{round(v) / 1000:.2f}s"
-	text = f"{v:.{decimals}f}ms"
-	# A value that rounds to zero must not keep a sign: a -0.3ms cross-run
-	# delta reads "0ms", never "-0.00ms".
-	if text.startswith("-") and float(text[:-2]) == 0.0:
+		text = f"{round(v) / 1000:.2f}s"
+	else:
+		text = f"{v:.{decimals}f}ms"
+	# A value that rounds to zero must not keep a sign: a tiny cross-run delta
+	# reads "0ms" / "0.00s", never "-0.00ms" / "-0.00s". Strip the unit, test the
+	# number, restore the unit.
+	unit = "ms" if text.endswith("ms") else "s"
+	if text.startswith("-") and float(text[: -len(unit)]) == 0.0:
 		text = text[1:]
 	return text
 
