@@ -241,14 +241,18 @@ def _get_jinja_env() -> Environment:
 #
 # The look-behind / look-ahead reject the URL-structural characters that would
 # put the token inside a browser-reported URL (path "/", slug "-", query "?" "="
-# "&", fragment "#") on either side, so "query-2000ms-test" and "?t=1500ms" are
-# left intact rather than rewritten into broken links. Deliberately NOT rejected:
+# "&", fragment "#"), so "query-2000ms-test" and "?t=1500ms" are left intact
+# rather than rewritten into broken links. A URL token is always protected by the
+# LEADING reject (it sits after "/", "=", "-", …), so "&" is left OUT of the
+# TRAILING reject: when this same helper runs over HTML-escaped notes (the
+# no-frappe fallback path escapes "<" to "&lt;"), a duration ends up written as
+# "12418.3 ms&lt;/li&gt;", and it must still roll over. Deliberately NOT rejected:
 # "~" and ":" (an approx "~1500ms" or a label "latency:1500ms" is real prose that
 # must still roll over). A trailing "." is allowed (sentence-final "5234ms.") but
 # not "ms.<word>" (a "2000ms.html" filename), so real prose still converts.
 _URL_CHARS = r"\w./=?&#-"
 _MS_TOKEN_RE = re.compile(
-	r"(?<![" + _URL_CHARS + r"])(\d+(?:\.\d+)?)\s?ms(?![\w/=?&#-])(?!\.\w)"
+	r"(?<![" + _URL_CHARS + r"])(\d+(?:\.\d+)?)\s?ms(?![\w/=?#-])(?!\.\w)"
 )
 # Split HTML into text runs and whole tags so the token rewrite never reaches
 # inside a tag. The same helper reformats both plain-text finding titles and

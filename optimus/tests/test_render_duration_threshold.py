@@ -156,6 +156,16 @@ class TestUrlsAreNotMangled:
 			'<span title="transition:2000ms">took 5.23s</span>'
 		)
 
+	def test_ms_before_an_html_entity_still_converts(self):
+		# The no-frappe fallback path HTML-escapes notes ("<" -> "&lt;"), so a
+		# duration can land immediately before an escaped tag: "12418.3 ms&lt;/li&gt;".
+		# The "&" there starts an entity, not a URL query separator, so the token must
+		# still roll over. (This is the pure-function guard for the render-path
+		# regression that only showed up in the frappe-less CI environment.)
+		assert _reformat_durations_in_text("Note: 12418.3 ms&lt;/li&gt;", 1000.0) == (
+			"Note: 12.42s&lt;/li&gt;"
+		)
+
 
 class TestDefaultThreshold:
 	def test_slow_row_renders_in_seconds(self):
