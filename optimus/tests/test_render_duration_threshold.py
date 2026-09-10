@@ -166,21 +166,25 @@ class TestUrlsAreNotMangled:
 			"Note: 12.42s&lt;/li&gt;"
 		)
 
-	def test_comma_grouped_duration_is_not_corrupted(self):
-		# AI-humanized notes can write a thousands-grouped duration ("2,000ms").
-		# The number pattern can't cross the comma, so only the trailing "000ms"
-		# group would match and collapse it to "2,0ms". It must be left whole.
-		assert _reformat_durations_in_text("waited 2,000ms total", 1000.0) == "waited 2,000ms total"
-		assert _reformat_durations_in_text("It took 1,500ms here", 500.0) == "It took 1,500ms here"
+	def test_comma_grouped_duration_converts(self):
+		# A thousands-grouped duration ("2,000ms", which AI-humanized notes can
+		# produce) is matched whole and rolls over like "2000ms" would, instead of
+		# corrupting to "2,0ms".
+		assert _reformat_durations_in_text("waited 2,000ms total", 1000.0) == "waited 2.00s total"
+		assert _reformat_durations_in_text("It took 1,500ms here", 500.0) == "It took 1.50s here"
+		# A non-Western grouping the pattern can't consume is left intact, never corrupted.
+		assert _reformat_durations_in_text("odd 1,23,456ms", 500.0) == "odd 1,23,456ms"
 
-	def test_space_grouped_duration_is_not_corrupted(self):
-		# Same bug class as the comma: a SPACE- / NBSP- / narrow-NBSP-grouped
-		# thousands ("2 000ms") must stay whole, not collapse to "2 0ms". A plain
-		# " 5234ms" (the space follows a non-digit) still converts.
+	def test_space_grouped_duration_converts(self):
+		# Same as the comma but SPACE- / NBSP- / narrow-NBSP-grouped ("2 000ms"):
+		# matched whole and rolled over, not collapsed to "2 0ms". A plain
+		# " 5234ms" (the space follows a non-digit) also converts.
 		for sep in (" ", "\u00a0", "\u202f"):  # space, NBSP, narrow NBSP
 			text = f"waited 2{sep}000ms total"
-			assert _reformat_durations_in_text(text, 1000.0) == text
+			assert _reformat_durations_in_text(text, 1000.0) == "waited 2.00s total"
 		assert _reformat_durations_in_text("done in 5234ms", 1000.0) == "done in 5.23s"
+		# A stray non-thousands grouping is left intact, never corrupted.
+		assert _reformat_durations_in_text("odd 1 23 456ms", 500.0) == "odd 1 23 456ms"
 
 
 class TestDefaultThreshold:

@@ -249,16 +249,27 @@ def _get_jinja_env() -> Environment:
 # "12418.3 ms&lt;/li&gt;", and it must still roll over. Deliberately NOT rejected:
 # "~" and ":" (an approx "~1500ms" or a label "latency:1500ms" is real prose that
 # must still roll over). A trailing "." is allowed (sentence-final "5234ms.") but
-# not "ms.<word>" (a "2000ms.html" filename), so real prose still converts. "," is
-# also rejected on the left so a thousands-grouped duration ("2,000ms", which
-# AI-humanized notes can produce) is left whole instead of matching only the
-# trailing "000ms" group and collapsing to "2,0ms". The second look-behind
-# rejects a group preceded by <digit><whitespace> so a SPACE- / NBSP- /
-# narrow-NBSP-grouped thousands ("2 000ms") is protected the same way (a plain
-# " 5234ms" still converts because the space there follows a non-digit).
+# not "ms.<word>" (a "2000ms.html" filename), so real prose still converts.
+#
+# Thousands-grouped durations are matched WHOLE by the _NUM pattern below (see
+# there), so "2,000ms" / "2 000ms" roll over to "2.00s" rather than corrupting to
+# "2,0ms". The two extra look-behinds are backstops for non-Western groupings the
+# pattern doesn't consume: "," in _URL_CHARS blocks the leftover group in
+# "1,23,456ms", and (?<!\d\s) blocks the leftover group in a stray "1 23 456ms"
+# (a plain " 5234ms" still converts, since that space follows a non-digit).
 _URL_CHARS = r"\w.,/=?&#-"
+# A thousands separator: comma, regular space, NBSP, narrow NBSP. Written with
+# \u escapes (Python resolves them to the real characters) so the source carries
+# no invisible whitespace.
+_THOUSANDS_SEP = "[,\u00a0\u202f ]"
+_SEP_STRIP_RE = re.compile(_THOUSANDS_SEP)
+# The number may be plain ("5234") or thousands-grouped ("2,000", "2 000",
+# "1,234,567.5"); a grouped number is matched WHOLE and its separators are
+# stripped in _reformat_durations_in_text, so "2,000ms" rolls over to "2.00s"
+# like "2000ms" instead of corrupting to "2,0ms".
+_NUM = r"(?:\d{1,3}(?:" + _THOUSANDS_SEP + r"\d{3})+|\d+)(?:\.\d+)?"
 _MS_TOKEN_RE = re.compile(
-	r"(?<![" + _URL_CHARS + r"])(?<!\d\s)(\d+(?:\.\d+)?)\s?ms(?![\w/=?#-])(?!\.\w)"
+	r"(?<![" + _URL_CHARS + r"])(?<!\d\s)(" + _NUM + r")\s?ms(?![\w/=?#-])(?!\.\w)"
 )
 # Split HTML into text runs and whole tags so the token rewrite never reaches
 # inside a tag. The same helper reformats both plain-text finding titles and
@@ -282,7 +293,9 @@ def _reformat_durations_in_text(text: str, threshold_ms: float) -> str:
 		return text
 
 	def _sub(m):
-		num = m.group(1)
+		# Drop any thousands separators ("2,000" / "2 000" -> "2000") before
+		# parsing, then keep the token's own decimal precision.
+		num = _SEP_STRIP_RE.sub("", m.group(1))
 		dec = len(num.split(".")[1]) if "." in num else 0
 		return humanize_duration_ms(float(num), threshold_ms, dec)
 
