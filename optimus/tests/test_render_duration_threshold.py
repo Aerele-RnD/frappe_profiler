@@ -147,6 +147,15 @@ class TestUrlsAreNotMangled:
 		assert _reformat_durations_in_text("about ~1500ms", 1000.0) == "about ~1.50s"
 		assert _reformat_durations_in_text("latency:1500ms", 1000.0) == "latency:1.50s"
 
+	def test_ms_token_inside_a_tag_attribute_is_not_rewritten(self):
+		# The reformatter also runs over already-rendered HTML (notes / summary), so
+		# a duration-like token inside an attribute (e.g. an inline style) must be
+		# left alone or it corrupts the markup; text between tags still converts.
+		html = '<span title="transition:2000ms">took 5234ms</span>'
+		assert _reformat_durations_in_text(html, 1000.0) == (
+			'<span title="transition:2000ms">took 5.23s</span>'
+		)
+
 
 class TestDefaultThreshold:
 	def test_slow_row_renders_in_seconds(self):

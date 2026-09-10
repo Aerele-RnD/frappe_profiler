@@ -47,7 +47,11 @@ function optimus_fmt_ms(ms, decimals) {
 	// measured durations don't hit that, and the common raw-vs-rounded mismatch
 	// this replaced is gone.)
 	if (threshold && rounded >= threshold) return (Math.round(v) / 1000).toFixed(2) + "s";
-	return v.toFixed(dec) + "ms";
+	var ms = v.toFixed(dec);
+	// Match the server: a value that rounds to zero must not keep a sign
+	// ("-0ms" -> "0ms"). Reachable only if the helper is reused for a signed value.
+	if (ms.charAt(0) === "-" && Number(ms) === 0) ms = ms.slice(1);
+	return ms + "ms";
 }
 
 // Single AI button: "Refresh AI suggestions". Replaces five legacy

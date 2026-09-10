@@ -46,6 +46,13 @@ versions may contain breaking changes see migration notes below).
   total" and "Network overhead" tiles always showed milliseconds, so they could read in a
   different unit than the timings right below them. They now follow the same rollover
   setting as the rest of the report.
+- **Duration reformatting no longer reaches inside HTML attributes.** The render step that
+  rewrites "1500ms" into "1.50s" runs over the notes and summary HTML too; it now rewrites
+  only the visible text between tags, so a duration-like value inside an attribute (an inline
+  style, say) can't corrupt the markup.
+- **The hot-path picker strips a negative zero like the report.** A value that rounds to zero
+  now reads "0ms" on the Optimus Session form too, not "-0ms", matching the server formatter
+  it mirrors.
 
 ### Internal
 

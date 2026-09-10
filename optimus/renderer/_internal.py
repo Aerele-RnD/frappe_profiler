@@ -250,6 +250,12 @@ _URL_CHARS = r"\w./=?&#-"
 _MS_TOKEN_RE = re.compile(
 	r"(?<![" + _URL_CHARS + r"])(\d+(?:\.\d+)?)\s?ms(?![\w/=?&#-])(?!\.\w)"
 )
+# Split HTML into text runs and whole tags so the token rewrite never reaches
+# inside a tag. The same helper reformats both plain-text finding titles and
+# already-rendered HTML (notes / summary), and a duration-like token can sit in
+# an attribute (style="transition:2000ms"); rewriting it there would corrupt the
+# markup. re.split with this capturing group returns [text, tag, text, tag, ...].
+_TAG_SPLIT_RE = re.compile(r"(<[^>]*>)")
 
 
 def _reformat_durations_in_text(text: str, threshold_ms: float) -> str:
@@ -257,7 +263,11 @@ def _reformat_durations_in_text(text: str, threshold_ms: float) -> str:
 	``threshold_ms`` (the "render durations in seconds above" setting),
 	preserving each token's own decimal precision so sub-ms line timings keep
 	their digits. Already-seconds values (``"1.50s"``) and non-duration text are
-	left untouched, so it is safe to run over text that is partly formatted."""
+	left untouched, so it is safe to run over text that is partly formatted.
+
+	Only the text between HTML tags is rewritten, never a tag's own contents, so a
+	token inside an attribute can't corrupt the markup. Plain text (a finding
+	title) has no tags and is reformatted whole."""
 	if not text or "ms" not in text:
 		return text
 
@@ -266,7 +276,12 @@ def _reformat_durations_in_text(text: str, threshold_ms: float) -> str:
 		dec = len(num.split(".")[1]) if "." in num else 0
 		return humanize_duration_ms(float(num), threshold_ms, dec)
 
-	return _MS_TOKEN_RE.sub(_sub, text)
+	# Even indices are the text runs between tags; odd indices are the tags.
+	parts = _TAG_SPLIT_RE.split(text)
+	for i in range(0, len(parts), 2):
+		if "ms" in parts[i]:
+			parts[i] = _MS_TOKEN_RE.sub(_sub, parts[i])
+	return "".join(parts)
 
 
 def render(
