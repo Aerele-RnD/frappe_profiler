@@ -6,8 +6,17 @@
 
 ---
 
+## Demo
+
+Start a session, run a real slow flow, press **Stop**, and open the report.
+
+https://github.com/user-attachments/assets/a0220ca5-06c2-4356-b146-9a3739f8185f
+
+---
+
 ## Table of contents
 
+- [Demo](#demo)
 - [What it is](#what-it-is)
 - [What it isn't](#what-it-isnt)
 - [Install](#install)
