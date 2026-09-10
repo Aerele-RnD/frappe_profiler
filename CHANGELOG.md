@@ -8,7 +8,7 @@ versions may contain breaking changes see migration notes below).
 
 ---
 
-## [0.12.46] - 2026-09-08
+## [0.12.48] - 2026-09-10
 
 ### Fixed
 
@@ -59,7 +59,7 @@ versions may contain breaking changes see migration notes below).
 
 ---
 
-## [0.12.45] - 2026-09-06
+## [0.12.47] - 2026-09-10
 
 ### Changed
 
@@ -99,6 +99,57 @@ versions may contain breaking changes see migration notes below).
   so changing the display unit accidentally moved the alarm (nearly always red on the
   default, never red on Relaxed). Danger now uses a real performance threshold that is
   independent of how durations are displayed.
+
+---
+
+## [0.12.46] - 2026-09-09
+
+### Fixed
+
+- **The "Preparing report" progress bar no longer stacks on the Optimus Session
+  form.** Analyze publishes `optimus_progress` many times per run (fetch, EXPLAIN,
+  one per analyzer, render, complete) and the form's handler drove
+  `frm.dashboard.set_headline` on every tick. In this Frappe version `set_headline`
+  appends a new `.form-message` each call rather than replacing it, so the form
+  filled with a stack of "Preparing report N% ..." bars. The handler now updates a
+  single self-managed banner element in place (the same pattern already used for the
+  background-jobs drain banner), styled with Frappe's native `.form-message.blue`
+  theme classes so it fits the desk UI in light and dark mode. It is removed when
+  the session reaches Ready or Failed and on any refresh that shows a different or
+  a new session (it is tagged with its owning session), so a stale bar cannot
+  linger when you navigate away, while the banner for the session you are watching
+  keeps updating in place.
+- **The Phase 2 "Line profiling is armed" notice no longer stacks either.** It was
+  painted with `frm.set_intro`, which routes to the same `show_message` that appends
+  rather than replaces, so refreshing while a pass was Recording piled up duplicate
+  orange notices. It now uses the same single in-place banner helper and Frappe's
+  native orange theme.
+
+---
+
+## [0.12.45] - 2026-09-09
+
+### Added
+
+- **"Try our other AI tools" section, pairing Jarvis with Aerele Lens.** The report now shows
+  both tools as a matched side-by-side pair under the Jump-to nav. Jarvis (jarvis.aerele.in)
+  is introduced as an AI teammate for your business that connects your chat subscriptions,
+  API keys or local AI models and answers questions from your ERPNext data, so you make the
+  call and Jarvis does the work.
+- **Product logo on each companion card.** The Jarvis spark mark and the Aerele Lens
+  magnifier mark are both drawn inline as SVG, so the marks ship inside the report with no
+  remote assets and the saved-HTML offline guarantee is untouched.
+
+### Changed
+
+- **Companion cards now use the Jarvis brand colour.** Both the Jarvis and Aerele Lens cards
+  use the violet from jarvis.aerele.in (a light violet tint background with a violet rail and
+  call-to-action), so they read as one matched pair. Each card keeps the report's Fraunces
+  display serif and hairline rules and wraps to a stack on narrow widths and in print.
+- **Companion links open in a new tab.** Each call-to-action now carries
+  `target="_blank"` (with `rel="noopener"`), so a click opens the product site in a new tab
+  instead of navigating away from the report. Each link is labelled so screen readers
+  announce that it opens in a new tab.
 
 ---
 
