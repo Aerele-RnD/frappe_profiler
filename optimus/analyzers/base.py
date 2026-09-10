@@ -19,6 +19,7 @@ Pure means no Frappe DB access, no Redis access, no I/O: analyzers operate only
 on the data passed in. The orchestrator (analyze.py) merges and persists results.
 """
 
+import math
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -49,6 +50,12 @@ def humanize_duration_ms(ms, threshold_ms: float = 1000.0, decimals: int = 0) ->
 	try:
 		v = float(ms) if ms is not None else 0.0
 	except (TypeError, ValueError):
+		v = 0.0
+	# inf / nan / a value so large it overflows to inf must format as zero, not
+	# blow up: round(inf) raises OverflowError and round(nan) raises ValueError,
+	# and OverflowError is not a ValueError, so a caller's except (TypeError,
+	# ValueError) would not catch it and the whole render would 500.
+	if not math.isfinite(v):
 		v = 0.0
 	if threshold_ms and round(abs(v)) >= threshold_ms:
 		# Divide the whole-millisecond value (same rounding as the decision

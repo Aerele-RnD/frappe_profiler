@@ -249,8 +249,11 @@ def _get_jinja_env() -> Environment:
 # "12418.3 ms&lt;/li&gt;", and it must still roll over. Deliberately NOT rejected:
 # "~" and ":" (an approx "~1500ms" or a label "latency:1500ms" is real prose that
 # must still roll over). A trailing "." is allowed (sentence-final "5234ms.") but
-# not "ms.<word>" (a "2000ms.html" filename), so real prose still converts.
-_URL_CHARS = r"\w./=?&#-"
+# not "ms.<word>" (a "2000ms.html" filename), so real prose still converts. "," is
+# also rejected on the left so a thousands-grouped duration ("2,000ms", which
+# AI-humanized notes can produce) is left whole instead of matching only the
+# trailing "000ms" group and collapsing to "2,0ms".
+_URL_CHARS = r"\w.,/=?&#-"
 _MS_TOKEN_RE = re.compile(
 	r"(?<![" + _URL_CHARS + r"])(\d+(?:\.\d+)?)\s?ms(?![\w/=?#-])(?!\.\w)"
 )

@@ -166,6 +166,13 @@ class TestUrlsAreNotMangled:
 			"Note: 12.42s&lt;/li&gt;"
 		)
 
+	def test_comma_grouped_duration_is_not_corrupted(self):
+		# AI-humanized notes can write a thousands-grouped duration ("2,000ms").
+		# The number pattern can't cross the comma, so only the trailing "000ms"
+		# group would match and collapse it to "2,0ms". It must be left whole.
+		assert _reformat_durations_in_text("waited 2,000ms total", 1000.0) == "waited 2,000ms total"
+		assert _reformat_durations_in_text("It took 1,500ms here", 500.0) == "It took 1,500ms here"
+
 
 class TestDefaultThreshold:
 	def test_slow_row_renders_in_seconds(self):

@@ -125,3 +125,19 @@ class TestNegativeZero:
 	def test_genuine_negative_keeps_sign(self):
 		assert humanize_duration_ms(-0.3, decimals=2) == "-0.30ms"
 		assert humanize_duration_ms(-5.0, decimals=2) == "-5.00ms"
+
+
+class TestNonFiniteInput:
+	"""inf / nan / an overflowing value format as zero (the "non-numeric -> zero"
+	contract), never crash: round(inf) raises OverflowError and round(nan) raises
+	ValueError, and OverflowError is not a ValueError, so a caller guarding
+	except (TypeError, ValueError) would otherwise 500 the whole render."""
+
+	def test_inf_nan_and_overflow_format_as_zero(self):
+		assert humanize_duration_ms("inf") == "0ms"
+		assert humanize_duration_ms("nan") == "0ms"
+		assert humanize_duration_ms("-inf") == "0ms"
+		assert humanize_duration_ms(float("inf")) == "0ms"
+		# A token so long it overflows float() to inf (the reformatter's \\d+ is
+		# unbounded) must also format as zero, not raise.
+		assert humanize_duration_ms("9" * 309) == "0ms"
