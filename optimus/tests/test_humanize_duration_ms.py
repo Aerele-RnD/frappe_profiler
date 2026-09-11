@@ -146,3 +146,6 @@ class TestNonFiniteInput:
 		# A token so long it overflows float() to inf (the reformatter's \\d+ is
 		# unbounded) must also format as zero, not raise.
 		assert humanize_duration_ms("9" * 309) == "0ms"
+		# A huge int overflows float() with OverflowError (not ValueError), which
+		# the except must catch too.
+		assert humanize_duration_ms(10 ** 400) == "0ms"

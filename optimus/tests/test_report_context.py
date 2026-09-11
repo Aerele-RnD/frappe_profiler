@@ -727,34 +727,19 @@ class TestHowToReadItems:
 		assert out["how_to_read_items"] is None
 
 
-class TestFrontendKpiRollover:
-	"""The frontend summary KPI tiles roll over to seconds at the configured
-	threshold instead of stamping a hard-coded "ms" next to numbers the rest of
-	the report shows in seconds."""
+class TestRowDangerThreshold:
+	"""Per-row 'hot' (red) styling uses a fixed slowness threshold, decoupled from
+	the display / rollover setting, so row danger never follows the Sensitivity
+	Profile (matching the Total-time KPI's own decoupling)."""
 
-	def _frontend(self, summary, threshold_ms):
-		ctx = _ctx(
-			frontend_summary=summary,
-			render_config={"large_duration_threshold_ms": threshold_ms},
-		)
-		fe = report_context._build_frontend(ctx)
-		return {tile["label"]: tile for tile in fe["kpis"]}
+	def test_hot_action_ms_is_fixed_regardless_of_display(self):
+		for disp in (500, 1000, 99999999, 0):
+			out = build_report_context(
+				_doc(), _ctx(render_config={"large_duration_threshold_ms": disp})
+			)
+			assert out["hot_action_ms"] == 1000.0
 
-	def test_tile_rolls_over_to_seconds(self):
-		tiles = self._frontend(
-			{"total_xhrs": 3, "total_xhr_ms": 5234,
-			 "total_backend_ms": 4000, "network_overhead_ms": 120},
-			1000,
-		)
-		assert (tiles["XHR total"]["value"], tiles["XHR total"]["unit"]) == ("5.23", "s")
-		assert (tiles["Backend total"]["value"], tiles["Backend total"]["unit"]) == ("4.00", "s")
-		# Sub-second value stays in ms.
-		assert (tiles["Network overhead"]["value"], tiles["Network overhead"]["unit"]) == ("120", "ms")
-
-	def test_disabled_threshold_keeps_tiles_in_ms(self):
-		tiles = self._frontend(
-			{"total_xhrs": 1, "total_xhr_ms": 5234,
-			 "total_backend_ms": 0, "network_overhead_ms": 0},
-			0,
-		)
-		assert (tiles["XHR total"]["value"], tiles["XHR total"]["unit"]) == ("5234", "ms")
+	def test_bar_kind_uses_the_fixed_threshold(self):
+		assert _bar_kind_for(1500) is None   # >= 1000 -> red
+		assert _bar_kind_for(600) == "warn"  # 300..1000 -> amber, NOT red
+		assert _bar_kind_for(200) == "ok"

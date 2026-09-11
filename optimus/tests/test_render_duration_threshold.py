@@ -187,6 +187,30 @@ class TestUrlsAreNotMangled:
 		assert _reformat_durations_in_text("odd 1 23 456ms", 500.0) == "odd 1 23 456ms"
 
 
+class TestRowDangerNotTiedToDisplay:
+	"""Per-row hot/red styling fires at a FIXED slowness threshold (1000ms), not
+	the display threshold, so Strict (500) doesn't paint every 500ms row red while
+	the Total-time KPI stays calm."""
+
+	def test_sub_second_action_not_hot_on_strict(self):
+		doc = _doc([_action(action_label="POST /a", http_method="POST", path="/a",
+		                    recording_uuid="r0", duration_ms=600)])
+		with patch("optimus.settings.get_config",
+		           return_value=OptimusConfig(large_duration_threshold_ms=500)):
+			html = renderer.render_raw(doc, recordings=[])
+		# Displays in seconds (600 >= the 500 display threshold) ...
+		assert "0.60s" in html
+		# ... but the row is NOT flagged hot/red: 600 < the fixed 1000ms danger
+		# threshold. (Check the APPLIED class, not the always-present CSS rule.)
+		assert 'class="hot-value"' not in html
+
+	def test_slow_action_is_hot(self):
+		doc = _doc([_action(action_label="POST /b", http_method="POST", path="/b",
+		                    recording_uuid="r1", duration_ms=1500)])
+		html = renderer.render_raw(doc, recordings=[])
+		assert 'class="hot-value"' in html  # 1500 >= 1000 fixed threshold
+
+
 class TestDefaultThreshold:
 	def test_slow_row_renders_in_seconds(self):
 		doc = _doc([

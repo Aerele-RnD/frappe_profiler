@@ -25,6 +25,14 @@ from optimus.analyzers.base import humanize_duration_ms
 # never moves the alarm. Tunable; not currently a settings field.
 _TOTAL_TIME_DANGER_MS = 3000.0
 
+# A single action / background job slower than this reads as "hot" (red bar + red
+# value) in the per-row tables. Like _TOTAL_TIME_DANGER_MS this is a real
+# performance threshold, deliberately NOT large_duration_threshold_ms: the row
+# danger colour must not follow the display preference / Sensitivity Profile
+# (which would turn every row red at 500ms on Strict while the Total-time KPI
+# stays calm). One source for the bar colour, the value colour and duration_is_hot.
+_HOT_ACTION_MS = 1000.0
+
 # ---------------------------------------------------------------------------
 # Helpers small pure functions called by sub-builders below
 # ---------------------------------------------------------------------------
@@ -57,13 +65,13 @@ def _web_vital_class(value, good_threshold, poor_threshold) -> str:
 def _bar_kind_for(duration_ms) -> str | None:
 	"""Per-action / per-job bar colour key.
 
-	``duration ≥ 1000ms`` → ``None`` (red, contract's default).
-	``300 ≤ duration < 1000`` → ``"warn"`` (amber).
+	``duration ≥ _HOT_ACTION_MS`` → ``None`` (red, contract's default).
+	``300 ≤ duration < _HOT_ACTION_MS`` → ``"warn"`` (amber).
 	``duration < 300`` → ``"ok"`` (green).
 	"""
 	if duration_ms is None:
 		return "ok"
-	if duration_ms >= 1000:
+	if duration_ms >= _HOT_ACTION_MS:
 		return None
 	if duration_ms >= 300:
 		return "warn"
@@ -102,19 +110,6 @@ def _ms_display(ms, threshold_ms: float = 1000.0, decimals: int = 0) -> str:
 	if ms is None:
 		return ""
 	return humanize_duration_ms(ms, threshold_ms, decimals)
-
-
-def _split_ms_display(ms, threshold_ms: float) -> tuple[str, str]:
-	"""Split the compact display of ``ms`` into (number, unit) so a KPI tile can
-	show the value large and the unit small, while still rolling over to seconds
-	at ``threshold_ms`` like the rest of the report (fixes tiles that used to
-	stamp a hard-coded "ms" next to rolled-over seconds elsewhere)."""
-	s = _ms_display(ms, threshold_ms=threshold_ms)
-	if s.endswith("ms"):
-		return s[:-2], "ms"
-	if s.endswith("s"):
-		return s[:-1], "s"
-	return s, ""
 
 
 # ---------------------------------------------------------------------------
@@ -515,7 +510,7 @@ def _build_actions(actions, findings, fmt_ms=None) -> list[dict]:
 			"kind": kind,
 			"duration_display": fmt(duration_ms),
 			"duration_pct": (duration_ms / max_ms) * 100 if max_ms else 0,
-			"duration_is_hot": duration_ms >= 1000,
+			"duration_is_hot": duration_ms >= _HOT_ACTION_MS,
 			"bar_kind": _bar_kind_for(duration_ms),
 			"queries": action.get("queries_count", 0) or 0,
 			"db_time_display": fmt(action.get("query_time_ms", 0) or 0),
@@ -551,7 +546,7 @@ def _build_background_jobs(jobs, fmt_ms=None) -> list[dict]:
 			"meta": meta,
 			"duration_display": fmt(duration_ms),
 			"duration_pct": (duration_ms / max_ms) * 100 if max_ms else 0,
-			"duration_is_hot": duration_ms >= 1000,
+			"duration_is_hot": duration_ms >= _HOT_ACTION_MS,
 			"bar_kind": _bar_kind_for(duration_ms),
 			"queries": job.get("queries_count", 0) or 0,
 			"db_time_display": fmt(job.get("query_time_ms", 0) or 0),
@@ -761,64 +756,13 @@ def _build_frontend(ctx) -> dict | None:
 			"browser_is_hot": xhr_ms >= 1000,
 		})
 
-	# kpis 4-item summary
-	kpis = []
-	if summary:
-		total_xhrs = summary.get("total_xhrs", 0) or 0
-		total_xhr_ms = summary.get("total_xhr_ms", 0) or 0
-		total_backend_ms = summary.get("total_backend_ms", 0) or 0
-		net_overhead = summary.get("network_overhead_ms", 0) or 0
-		slowest = summary.get("slowest_xhr") or {}
-		slowest_sub = (
-			f"slowest {_ms_display(slowest.get('duration_ms', 0) or 0, threshold_ms=threshold_ms)}"
-			if slowest else ""
-		)
-		# The value/unit split lets each tile roll over to seconds at the
-		# configured threshold instead of always stamping "ms" beside numbers
-		# the rest of the report shows in seconds.
-		xhr_val, xhr_unit = _split_ms_display(total_xhr_ms, threshold_ms)
-		backend_val, backend_unit = _split_ms_display(total_backend_ms, threshold_ms)
-		net_val, net_unit = _split_ms_display(net_overhead, threshold_ms)
-		kpis = [
-			{
-				"label": "XHRs",
-				"value": str(total_xhrs),
-				"unit": "",
-				"sub_html": "",
-				"value_kind": "normal",
-				"sub_is_warn": False,
-			},
-			{
-				"label": "XHR total",
-				"value": xhr_val,
-				"unit": xhr_unit,
-				"sub_html": "",
-				"value_kind": "normal",
-				"sub_is_warn": False,
-			},
-			{
-				"label": "Backend total",
-				"value": backend_val,
-				"unit": backend_unit,
-				"sub_html": "",
-				"value_kind": "normal",
-				"sub_is_warn": False,
-			},
-			{
-				"label": "Network overhead",
-				"value": net_val,
-				"unit": net_unit,
-				"sub_html": slowest_sub,
-				"value_kind": "warn" if net_overhead > 500 else "normal",
-				"sub_is_warn": False,
-			},
-		]
-
 	# J.2.4 non-contract additions: pass-through the raw summary +
 	# xhr_matched + orphans so the existing rc-card markup, XHR-table
 	# columns and orphans details-block migrate as a straight key rename.
+	# (A separate frontend "kpis" tile set was built here once but the template
+	# never rendered it; the XHR/web-vitals cells below already roll over to
+	# seconds via _ms_display, so it was dead and is gone.)
 	return {
-		"kpis": kpis,
 		"xhrs": xhrs_out,
 		"web_vitals": web_vitals,
 		"summary": summary or {},
@@ -1091,6 +1035,9 @@ def build_report_context(session_doc: Any, ctx: dict) -> dict:
 		# the template needs before the legacy top-level keys can be
 		# dropped from renderer.py's context dict.
 		"large_duration_threshold_ms": _resolve_threshold_ms(ctx.get("render_config")),
+		# Fixed per-row "hot" threshold (red bar/value), independent of the display
+		# preference above so row danger doesn't follow the Sensitivity Profile.
+		"hot_action_ms": _HOT_ACTION_MS,
 		"background_jobs_summary": _build_background_jobs_summary(ctx.get("background_jobs") or {}),
 	}
 

@@ -42,10 +42,6 @@ versions may contain breaking changes see migration notes below).
   formatter rounded to seconds from the raw value while the report now rounds from the whole
   millisecond, so the picker and the report could show the same duration as "1.23s" in one
   place and "1.24s" in the other. The picker now rounds the same way.
-- **The frontend summary tiles roll over to seconds too.** The "XHR total", "Backend
-  total" and "Network overhead" tiles always showed milliseconds, so they could read in a
-  different unit than the timings right below them. They now follow the same rollover
-  setting as the rest of the report.
 - **Duration reformatting no longer reaches inside HTML attributes.** The render step that
   rewrites "1500ms" into "1.50s" runs over the notes and summary HTML too; it now rewrites
   only the visible text between tags, so a duration-like value inside an attribute (an inline
