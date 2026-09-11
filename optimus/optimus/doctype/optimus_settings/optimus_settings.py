@@ -141,7 +141,7 @@ class OptimusSettings(Document):
 		)
 		frappe.msgprint(
 			msg,
-			title="Tracked Apps possible misconfiguration",
+			title="Tracked Apps: possible misconfiguration",
 			indicator="orange",
 		)
 
@@ -173,6 +173,6 @@ class OptimusSettings(Document):
 			+ (" is" if len(missing) == 1 else " are")
 			+ " not set. The <b>Suggest a fix (AI)</b> button will report a "
 			"configuration error until you fill these in.",
-			title="AI Fix Suggestions incomplete config",
+			title="AI Fix Suggestions: incomplete config",
 			indicator="orange",
 		)

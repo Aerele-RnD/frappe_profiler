@@ -6,10 +6,12 @@
 The threshold controls how durations render: values at or above it display as
 seconds (e.g. ``5.23s``); below it, they stay as milliseconds (``800ms``)."""
 
+import json
 import types
 from unittest.mock import patch
 
 from optimus import renderer
+from optimus.renderer._internal import _reformat_durations_in_text
 from optimus.settings import OptimusConfig
 
 
@@ -29,7 +31,7 @@ def _action(**kw):
 	return types.SimpleNamespace(**base)
 
 
-def _doc(actions):
+def _doc(actions, findings=None):
 	return types.SimpleNamespace(
 		name="PS-t", session_uuid="t", title="t",
 		user="a@example.com", status="Ready",
@@ -41,8 +43,172 @@ def _doc(actions):
 		hot_frames_json="[]", session_time_breakdown_json=None,
 		total_python_ms=None, total_sql_ms=None,
 		analyzer_warnings=None, v5_aggregate_json="{}",
-		actions=actions, findings=[], phase_2_runs=[],
+		actions=actions, findings=findings or [], phase_2_runs=[],
 	)
+
+
+def _finding(title, impact_ms):
+	"""A Slow Query finding whose title carries a RAW-ms duration, as the
+	analyzer bakes it. Render reformats that duration; nothing is pre-formatted."""
+	return types.SimpleNamespace(
+		finding_type="Slow Query", severity="High",
+		title=title, customer_description="A single query was slow.",
+		estimated_impact_ms=impact_ms, affected_count=1, action_ref="0",
+		technical_detail_json=json.dumps({
+			"normalized_query": "SELECT 1",
+			"callsite": "apps/myapp/foo.py:456",
+		}),
+	)
+
+
+class TestFindingTitleThreshold:
+	"""Finding titles bake raw ms at analyze time; render reformats them using
+	the configured threshold, so a regenerated (not re-analyzed) report never
+	shows a title unit that disagrees with the render-time impact badge."""
+
+	def test_title_rolls_to_seconds_at_default(self):
+		doc = _doc([], findings=[_finding("Slow query: 5234ms", 5234.0)])
+		html = renderer.render_raw(doc, recordings=[])
+		assert "Slow query: 5.23s" in html
+		assert "Slow query: 5234ms" not in html
+
+	def test_title_stays_ms_on_relaxed_threshold(self):
+		doc = _doc([], findings=[_finding("Slow query: 5234ms", 5234.0)])
+		with patch(
+			"optimus.settings.get_config",
+			return_value=OptimusConfig(large_duration_threshold_ms=99999999),
+		):
+			html = renderer.render_raw(doc, recordings=[])
+		# Relaxed profile: the title stays in ms, matching the tables.
+		assert "Slow query: 5234ms" in html
+		assert "Slow query: 5.23s" not in html
+
+
+class TestNotesReproducerThreshold:
+	"""The Steps-to-Reproduce list bakes raw ms with a SPACE ("12418.3 ms") at
+	analyze time; render must reformat those too (regression: the space form
+	slipped past the first pass)."""
+
+	def test_steps_to_reproduce_ms_converted_at_render(self):
+		doc = _doc([])
+		doc.notes = (
+			"<ol><li>Submit Delivery Note: 12418.3 ms</li>"
+			"<li>Fast step: 800 ms</li></ol>"
+		)
+		html = renderer.render_raw(doc, recordings=[])
+		assert "Submit Delivery Note: 12.42s" in html
+		assert "12418.3 ms" not in html
+		assert "Fast step: 800ms" in html  # sub-second stays ms
+
+
+class TestDisabledThresholdHonouredEverywhere:
+	"""Regression for the review finding: the finding impact badge is built by
+	report_context, which used to fall back to 1000 for a 0 threshold and roll a
+	value over to seconds even when the whole report was set to stay in ms. With
+	threshold=0 ("disable") honoured in every render path, the badge and title
+	both stay in ms, so the two halves of the report can no longer disagree."""
+
+	def test_finding_title_and_badge_both_stay_ms_when_disabled(self):
+		doc = _doc([], findings=[_finding("Slow query: 5234ms", 5234.0)])
+		with patch(
+			"optimus.settings.get_config",
+			return_value=OptimusConfig(large_duration_threshold_ms=0),
+		):
+			html = renderer.render_raw(doc, recordings=[])
+		# Nothing rolls over: the raw ms form survives, no seconds anywhere.
+		assert "5234ms" in html
+		assert "5.23s" not in html
+
+
+class TestUrlsAreNotMangled:
+	"""``_reformat_durations_in_text`` rewrites <n>ms duration tokens in prose,
+	but a browser-reported URL (frontend findings embed these in titles /
+	descriptions / notes) can contain the same pattern. It must be left intact so
+	links don't break."""
+
+	def test_real_duration_converts_url_stays_intact(self):
+		text = "LCP 1600ms on /app/report/query-2000ms-test"
+		out = _reformat_durations_in_text(text, 1000.0)
+		# The real duration rolls over; the URL segment is untouched.
+		assert out == "LCP 1.60s on /app/report/query-2000ms-test"
+
+	def test_href_query_param_not_rewritten(self):
+		assert _reformat_durations_in_text("open ?t=1500ms now", 1000.0) == "open ?t=1500ms now"
+
+	def test_path_segment_not_rewritten(self):
+		assert _reformat_durations_in_text("GET /api/2000ms/x", 1000.0) == "GET /api/2000ms/x"
+
+	def test_sentence_final_duration_still_converts(self):
+		assert _reformat_durations_in_text("It took 5234ms.", 1000.0) == "It took 5.23s."
+
+	def test_approx_and_label_prefixes_still_convert(self):
+		# "~" (approx) and ":" (label) are real prose, not URL structure, so a
+		# duration written as "~1500ms" or "latency:1500ms" must still roll over.
+		assert _reformat_durations_in_text("about ~1500ms", 1000.0) == "about ~1.50s"
+		assert _reformat_durations_in_text("latency:1500ms", 1000.0) == "latency:1.50s"
+
+	def test_ms_token_inside_a_tag_attribute_is_not_rewritten(self):
+		# The reformatter also runs over already-rendered HTML (notes / summary), so
+		# a duration-like token inside an attribute (e.g. an inline style) must be
+		# left alone or it corrupts the markup; text between tags still converts.
+		html = '<span title="transition:2000ms">took 5234ms</span>'
+		assert _reformat_durations_in_text(html, 1000.0) == (
+			'<span title="transition:2000ms">took 5.23s</span>'
+		)
+
+	def test_ms_before_an_html_entity_still_converts(self):
+		# The no-frappe fallback path HTML-escapes notes ("<" -> "&lt;"), so a
+		# duration can land immediately before an escaped tag: "12418.3 ms&lt;/li&gt;".
+		# The "&" there starts an entity, not a URL query separator, so the token must
+		# still roll over. (This is the pure-function guard for the render-path
+		# regression that only showed up in the frappe-less CI environment.)
+		assert _reformat_durations_in_text("Note: 12418.3 ms&lt;/li&gt;", 1000.0) == (
+			"Note: 12.42s&lt;/li&gt;"
+		)
+
+	def test_comma_grouped_duration_converts(self):
+		# A thousands-grouped duration ("2,000ms", which AI-humanized notes can
+		# produce) is matched whole and rolls over like "2000ms" would, instead of
+		# corrupting to "2,0ms".
+		assert _reformat_durations_in_text("waited 2,000ms total", 1000.0) == "waited 2.00s total"
+		assert _reformat_durations_in_text("It took 1,500ms here", 500.0) == "It took 1.50s here"
+		# A non-Western grouping the pattern can't consume is left intact, never corrupted.
+		assert _reformat_durations_in_text("odd 1,23,456ms", 500.0) == "odd 1,23,456ms"
+
+	def test_space_grouped_duration_converts(self):
+		# Same as the comma but SPACE- / NBSP- / narrow-NBSP-grouped ("2 000ms"):
+		# matched whole and rolled over, not collapsed to "2 0ms". A plain
+		# " 5234ms" (the space follows a non-digit) also converts.
+		for sep in (" ", "\u00a0", "\u202f"):  # space, NBSP, narrow NBSP
+			text = f"waited 2{sep}000ms total"
+			assert _reformat_durations_in_text(text, 1000.0) == "waited 2.00s total"
+		assert _reformat_durations_in_text("done in 5234ms", 1000.0) == "done in 5.23s"
+		# A stray non-thousands grouping is left intact, never corrupted.
+		assert _reformat_durations_in_text("odd 1 23 456ms", 500.0) == "odd 1 23 456ms"
+
+
+class TestRowDangerNotTiedToDisplay:
+	"""Per-row hot/red styling fires at a FIXED slowness threshold (1000ms), not
+	the display threshold, so Strict (500) doesn't paint every 500ms row red while
+	the Total-time KPI stays calm."""
+
+	def test_sub_second_action_not_hot_on_strict(self):
+		doc = _doc([_action(action_label="POST /a", http_method="POST", path="/a",
+		                    recording_uuid="r0", duration_ms=600)])
+		with patch("optimus.settings.get_config",
+		           return_value=OptimusConfig(large_duration_threshold_ms=500)):
+			html = renderer.render_raw(doc, recordings=[])
+		# Displays in seconds (600 >= the 500 display threshold) ...
+		assert "0.60s" in html
+		# ... but the row is NOT flagged hot/red: 600 < the fixed 1000ms danger
+		# threshold. (Check the APPLIED class, not the always-present CSS rule.)
+		assert 'class="hot-value"' not in html
+
+	def test_slow_action_is_hot(self):
+		doc = _doc([_action(action_label="POST /b", http_method="POST", path="/b",
+		                    recording_uuid="r1", duration_ms=1500)])
+		html = renderer.render_raw(doc, recordings=[])
+		assert 'class="hot-value"' in html  # 1500 >= 1000 fixed threshold
 
 
 class TestDefaultThreshold:

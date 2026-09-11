@@ -531,7 +531,7 @@ def analyze(recordings: list[dict], context) -> AnalyzerResult:
 			f"Skipped {total_parser_limit} query(ies) whose shape "
 			"exceeds the DBOptimizer heuristic's sql_metadata parser "
 			"(correlated subqueries, complex ORDER BY expressions, window "
-			"functions). These aren't actionable index suggestions "
+			"functions). These aren't actionable. Index suggestions "
 			"require a simpler WHERE/JOIN shape the parser can analyze."
 		)
 	# v0.5.1: separate informational line about non-SELECT statements that
@@ -564,7 +564,7 @@ def analyze(recordings: list[dict], context) -> AnalyzerResult:
 			f"Suppressed {drop_never_suggest} index suggestion(s) on "
 			f"Frappe metadata columns ({sample}{more}). These columns are "
 			"written on every save or submit (or are already auto-indexed), "
-			"so an index there is a write-cost trap not suggested."
+			"so an index there is a write-cost trap, not suggested."
 		)
 	if dropped_meta_table_tables:
 		sample = ", ".join(sorted(dropped_meta_table_tables)[:5])

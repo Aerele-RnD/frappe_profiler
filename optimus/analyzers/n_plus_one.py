@@ -361,9 +361,9 @@ def _build_user_finding(
 				"fix_hint": (
 					"This is a classic N+1 pattern. The Python code at "
 					f"{filename}:{lineno} is running the same query in a loop. "
-					"Refactor to fetch all needed data in a single query for "
+					"Refactor to fetch all needed data in a single query. For "
 					"Frappe specifically, that's usually frappe.get_all() with a "
-					"name-IN filter, or a JOIN against the source table instead "
+					"name-IN filter, or a JOIN against the source table, instead "
 					"of one row at a time."
 				),
 			},
@@ -419,7 +419,7 @@ def _build_framework_finding(
 			f"{total_count} queries in this session, totalling "
 			f"{total_time:.0f}ms. This is typically the framework "
 			"resolving metadata, permissions, or building queries for "
-			"different inputs it's rarely something you can change "
+			"different inputs. It's rarely something you can change "
 			"in your application code. Listed here for transparency, "
 			"not as an action item. If the cumulative cost is high, "
 			"the fix usually lives in the Frappe codebase itself."

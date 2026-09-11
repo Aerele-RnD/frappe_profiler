@@ -75,7 +75,7 @@ def get_dialect() -> Dialect:
 
 				frappe.log_error(
 					title="optimus unknown db_type",
-					message=f"db_type={dbt!r} not recognized using the MariaDB dialect",
+					message=f"db_type={dbt!r} not recognized, using the MariaDB dialect",
 				)
 			except Exception:
 				pass

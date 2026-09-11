@@ -19,6 +19,8 @@ Pure means no Frappe DB access, no Redis access, no I/O: analyzers operate only
 on the data passed in. The orchestrator (analyze.py) merges and persists results.
 """
 
+import math
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -29,6 +31,124 @@ from typing import Any
 # analyzer when sorting its findings list. Moved here from per-module
 # copies to keep the ordering consistent across the pipeline.
 SEVERITY_ORDER: dict[str, int] = {"High": 0, "Medium": 1, "Low": 2}
+
+
+def humanize_duration_ms(ms, threshold_ms: float = 1000.0, decimals: int = 0) -> str:
+	"""Plain-text duration: ``"<n>ms"`` below ``threshold_ms``, ``"<n.nn>s"`` at
+	or above it. ``threshold_ms`` is the "render durations in seconds above (ms)"
+	setting; ``0`` disables the conversion.
+
+	The unit is chosen from the value rounded to whole milliseconds, independent
+	of the display ``decimals``, so a value that rounds up to a full second reads
+	as ``"1.00s"`` rather than the four-digit ``"1000ms"`` the feature exists to
+	avoid, and the same duration never rolls over in one place while staying in
+	milliseconds in another that shows it at a different precision. ``decimals``
+	sets the millisecond precision only (the seconds branch always keeps two).
+	Argument order matches ``renderer.time_format._format_duration_ms`` and
+	``report_context._ms_display``.
+	Defensive: ``None`` or a non-numeric value formats as zero.
+	"""
+	try:
+		v = float(ms) if ms is not None else 0.0
+	except (TypeError, ValueError, OverflowError):
+		# OverflowError: float(10**400) on a huge int; it is NOT a ValueError, so
+		# it must be caught explicitly or it escapes past callers' guards.
+		v = 0.0
+	# inf / nan / a value so large it overflows to inf must format as zero, not
+	# blow up: round(inf) raises OverflowError and round(nan) raises ValueError,
+	# and OverflowError is not a ValueError, so a caller's except (TypeError,
+	# ValueError) would not catch it and the whole render would 500.
+	if not math.isfinite(v):
+		v = 0.0
+	if threshold_ms and round(abs(v)) >= threshold_ms:
+		# Divide the whole-millisecond value (same rounding as the decision
+		# above), so a duration formatted straight from the raw float and the
+		# same duration re-parsed from already-rounded "1235ms" finding text
+		# can't disagree by 0.01s at a rounding boundary.
+		text = f"{round(v) / 1000:.2f}s"
+	else:
+		text = f"{v:.{decimals}f}ms"
+	# A value that rounds to zero must not keep a sign: a tiny cross-run delta
+	# reads "0ms" / "0.00s", never "-0.00ms" / "-0.00s". Strip the unit, test the
+	# number, restore the unit.
+	unit = "ms" if text.endswith("ms") else "s"
+	if text.startswith("-") and float(text[: -len(unit)]) == 0.0:
+		text = text[1:]
+	return text
+
+
+# A duration token in analyzer-produced prose (finding title/description or the
+# summary): an integer or decimal immediately followed by "ms". Duration
+# formatting is a render-time concern, so these raw-ms tokens are reformatted
+# here (see _reformat_durations_in_text), never baked at analyze time.
+#
+# The look-behind / look-ahead reject the URL-structural characters that would
+# put the token inside a browser-reported URL (path "/", slug "-", query "?" "="
+# "&", fragment "#"), so "query-2000ms-test" and "?t=1500ms" are left intact
+# rather than rewritten into broken links. A URL token is always protected by the
+# LEADING reject (it sits after "/", "=", "-", …), so "&" is left OUT of the
+# TRAILING reject: when this same helper runs over HTML-escaped notes (the
+# no-frappe fallback path escapes "<" to "&lt;"), a duration ends up written as
+# "12418.3 ms&lt;/li&gt;", and it must still roll over. Deliberately NOT rejected:
+# "~" and ":" (an approx "~1500ms" or a label "latency:1500ms" is real prose that
+# must still roll over). A trailing "." is allowed (sentence-final "5234ms.") but
+# not "ms.<word>" (a "2000ms.html" filename), so real prose still converts.
+#
+# Thousands-grouped durations are matched WHOLE by the _NUM pattern below (see
+# there), so "2,000ms" / "2 000ms" roll over to "2.00s" rather than corrupting to
+# "2,0ms". The two extra look-behinds are backstops for non-Western groupings the
+# pattern doesn't consume: "," in _URL_CHARS blocks the leftover group in
+# "1,23,456ms", and (?<!\d\s) blocks the leftover group in a stray "1 23 456ms"
+# (a plain " 5234ms" still converts, since that space follows a non-digit).
+_URL_CHARS = r"\w.,/=?&#-"
+# A thousands separator: comma, regular space, NBSP, narrow NBSP. Written with
+# \u escapes (Python resolves them to the real characters) so the source carries
+# no invisible whitespace.
+_THOUSANDS_SEP = "[,\u00a0\u202f ]"
+_SEP_STRIP_RE = re.compile(_THOUSANDS_SEP)
+# The number may be plain ("5234") or thousands-grouped ("2,000", "2 000",
+# "1,234,567.5"); a grouped number is matched WHOLE and its separators are
+# stripped in _reformat_durations_in_text, so "2,000ms" rolls over to "2.00s"
+# like "2000ms" instead of corrupting to "2,0ms".
+_NUM = r"(?:\d{1,3}(?:" + _THOUSANDS_SEP + r"\d{3})+|\d+)(?:\.\d+)?"
+_MS_TOKEN_RE = re.compile(
+	r"(?<![" + _URL_CHARS + r"])(?<!\d\s)(" + _NUM + r")\s?ms(?![\w/=?#-])(?!\.\w)"
+)
+# Split HTML into text runs and whole tags so the token rewrite never reaches
+# inside a tag. The same helper reformats both plain-text finding titles and
+# already-rendered HTML (notes / summary), and a duration-like token can sit in
+# an attribute (style="transition:2000ms"); rewriting it there would corrupt the
+# markup. re.split with this capturing group returns [text, tag, text, tag, ...].
+_TAG_SPLIT_RE = re.compile(r"(<[^>]*>)")
+
+
+def _reformat_durations_in_text(text: str, threshold_ms: float) -> str:
+	"""Reformat every ``<n>ms`` token in ``text`` through the configured
+	``threshold_ms`` (the "render durations in seconds above" setting),
+	preserving each token's own decimal precision so sub-ms line timings keep
+	their digits. Already-seconds values (``"1.50s"``) and non-duration text are
+	left untouched, so it is safe to run over text that is partly formatted.
+
+	Only the text between HTML tags is rewritten, never a tag's own contents, so a
+	token inside an attribute can't corrupt the markup. Plain text (a finding
+	title) has no tags and is reformatted whole."""
+	if not text or "ms" not in text:
+		return text
+
+	def _sub(m):
+		# Drop any thousands separators ("2,000" / "2 000" -> "2000") before
+		# parsing, then keep the token's own decimal precision.
+		num = _SEP_STRIP_RE.sub("", m.group(1))
+		dec = len(num.split(".")[1]) if "." in num else 0
+		return humanize_duration_ms(float(num), threshold_ms, dec)
+
+	# Even indices are the text runs between tags; odd indices are the tags.
+	parts = _TAG_SPLIT_RE.split(text)
+	for i in range(0, len(parts), 2):
+		if "ms" in parts[i]:
+			parts[i] = _MS_TOKEN_RE.sub(_sub, parts[i])
+	return "".join(parts)
+
 
 # Path prefixes we treat as "framework" when picking a representative
 # callsite for a query. The goal is to blame the user's business logic,

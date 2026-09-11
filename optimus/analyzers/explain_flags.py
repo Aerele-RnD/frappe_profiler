@@ -273,7 +273,7 @@ def analyze(recordings: list[dict], context) -> AnalyzerResult:
 			f"Suppressed {drop_alias} EXPLAIN row(s) whose `table` value "
 			"was a SQL alias (a / c / p / addr / ...) rather than a "
 			"real table name. 'Full table scan on a' isn't actionable "
-			"without knowing which table 'a' aliases the per-query "
+			"without knowing which table 'a' aliases. The per-query "
 			"detail in the Top Queries section shows the actual SQL "
 			"if you want to investigate."
 		)
@@ -282,7 +282,7 @@ def analyze(recordings: list[dict], context) -> AnalyzerResult:
 			f"Suppressed {drop_framework_doctype} SQL finding(s) on "
 			"stock Frappe / ERPNext DocTypes (tabDocField, tabWorkspace, "
 			"tabCustom Field, etc.). You can't add an index to a "
-			"framework-owned DocType from your application code it "
+			"framework-owned DocType from your application code. It "
 			"requires an upstream patch. If one of these is a real "
 			"hot spot, check whether a Frappe upgrade has already "
 			"indexed it, or file an upstream issue."

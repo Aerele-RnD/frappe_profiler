@@ -371,7 +371,7 @@
 			callback: () => {
 				frappe.show_alert({
 					message: __(
-						"Phase 2 stopped analyzing now. Open the session " +
+						"Phase 2 stopped. Analyzing now. Open the session " +
 						"to see the line-level report when it's ready."
 					),
 					indicator: "blue",
@@ -419,13 +419,13 @@
 				switch (head) {
 					case "Form":
 						return doctype && leaf
-							? `${doctype} ${leaf}`
+							? `${doctype} - ${leaf}`
 							: doctype || "Form";
 					case "List":
 						if (!doctype) return "List";
 						if (sub === "Kanban") {
 							return leaf
-								? `${doctype} kanban ${leaf}`
+								? `${doctype} kanban - ${leaf}`
 								: `${doctype} kanban`;
 						}
 						if (sub === "Report") return `${doctype} report`;
@@ -436,15 +436,15 @@
 					case "Tree":
 						return doctype ? `${doctype} tree` : "Tree";
 					case "query-report":
-						return doctype ? `Report ${doctype}` : "Report";
+						return doctype ? `Report - ${doctype}` : "Report";
 					case "dashboard-view":
-						return doctype ? `Dashboard ${doctype}` : "Dashboard";
+						return doctype ? `Dashboard - ${doctype}` : "Dashboard";
 					case "modules":
 					case "desk":
 					case "app":
 						return "Profiling session";
 					default:
-						if (head && doctype) return `${head} ${doctype}`;
+						if (head && doctype) return `${head} - ${doctype}`;
 						if (head) return String(head);
 						return "Profiling session";
 				}
@@ -484,7 +484,7 @@
 					length: 140,
 					default: getDefaultSessionLabel(),
 					description:
-						"Give this session a name you'll recognize later e.g. 'Sales Invoice flow with 50 items'. (up to 140 characters)",
+						"Give this session a name you'll recognize later, e.g. 'Sales Invoice flow with 50 items'. (up to 140 characters)",
 				},
 				{
 					fieldname: "warning_html",
@@ -492,7 +492,7 @@
 					options: `
 						<div style="background: #fffbeb; border: 1px solid #fbbf24; border-radius: 4px; padding: 10px 12px; margin-top: 10px; font-size: 0.85rem; color: #92400e;">
 							<strong>Note:</strong> Recording adds ~1.5–2× wall-clock overhead per request while it's running.
-							Only your traffic will be captured other users on this site are not affected.
+							Only your traffic will be captured. Other users on this site are not affected.
 							The session auto-stops after 10 minutes.
 						</div>
 					`,
